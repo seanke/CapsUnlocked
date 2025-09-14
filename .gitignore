@@ -1,0 +1,51 @@
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+Makefile
+*.cmake
+*.dir/
+cmake-build-*/
+
+# Build directories
+/build/
+/out/
+/bin/
+/obj/
+/Debug/
+/Release/
+/x64/
+/x86/
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj.user
+*.user
+*.userosscache
+*.VC.db
+*.VC.opendb
+*.suo
+
+# Editor/IDE
+.idea/
+.vscode/
+
+# Binaries and artifacts
+*.exe
+*.dll
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.iobj
+*.ipdb
+*.obj
+
+# Logs
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db
