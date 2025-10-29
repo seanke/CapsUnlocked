@@ -1,9 +1,7 @@
 #pragma once
 
-#include <windows.h>
-#include <unordered_map>
+#include "config.h"
 
-void set_mapping(const std::unordered_map<UINT, UINT>& map);
+void set_mapping(const KeyMapping& map);
 bool install_hook();
 void uninstall_hook();
-

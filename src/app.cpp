@@ -1,9 +1,9 @@
-#include <windows.h>
-#include <shellapi.h>
-#include <string>
-
 #include "hook.h"
 #include "config.h"
+
+#if defined(_WIN32)
+#include <shellapi.h>
+#include <string>
 
 static HWND g_hwnd = nullptr;
 static const wchar_t* APP_CLASS_NAME = L"CapsUnlockedHiddenWindow";
@@ -114,3 +114,24 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
     return 0;
 }
 
+#else
+
+#include <cstdlib>
+#include <iostream>
+
+int main() {
+    auto mapping = load_config();
+    set_mapping(mapping);
+
+    if (!install_hook()) {
+        std::cerr << "Failed to install keyboard event tap." << std::endl;
+        return 1;
+    }
+
+    std::atexit(uninstall_hook);
+    std::cout << "CapsUnlocked running. Hold CapsLock for layer. Press Ctrl+C to exit." << std::endl;
+    CFRunLoopRun();
+    return 0;
+}
+
+#endif

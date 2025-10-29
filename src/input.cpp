@@ -1,8 +1,10 @@
 #include "input.h"
 
+#if defined(_WIN32)
+
 static const ULONG_PTR INJECT_MARKER = 0xBEEFCAFE;
 
-bool is_extended_key(UINT vk) {
+bool is_extended_key(KeyCode vk) {
     switch (vk) {
         case VK_LEFT: case VK_RIGHT: case VK_UP: case VK_DOWN:
         case VK_INSERT: case VK_DELETE: case VK_HOME: case VK_END:
@@ -15,7 +17,7 @@ bool is_extended_key(UINT vk) {
     }
 }
 
-void send_key(UINT vk, bool down) {
+void send_key(KeyCode vk, bool down) {
     INPUT in{};
     in.type = INPUT_KEYBOARD;
     in.ki.wVk = static_cast<WORD>(vk);
@@ -28,4 +30,23 @@ void send_key(UINT vk, bool down) {
 bool is_our_injected(const KBDLLHOOKSTRUCT& kb) {
     return kb.dwExtraInfo == INJECT_MARKER;
 }
+
+#else
+
+static const int64_t INJECT_MARKER = 0xBEEFCAFE;
+
+void send_key(KeyCode vk, bool down) {
+    CGEventRef event = CGEventCreateKeyboardEvent(nullptr, vk, down);
+    if (!event) return;
+    CGEventSetIntegerValueField(event, kCGEventSourceUserData, INJECT_MARKER);
+    CGEventPost(kCGSessionEventTap, event);
+    CFRelease(event);
+}
+
+bool is_our_injected(CGEventRef event) {
+    if (!event) return false;
+    return CGEventGetIntegerValueField(event, kCGEventSourceUserData) == INJECT_MARKER;
+}
+
+#endif
 

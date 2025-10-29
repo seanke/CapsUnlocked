@@ -6,8 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Build a GUI (WIN32) app so it can live in the tray without a console window.
-add_executable(CapsUnlocked WIN32
+set(CAPS_UNLOCKED_SOURCES
     src/app.cpp
     src/hook.cpp
     src/config.cpp
@@ -15,10 +14,20 @@ add_executable(CapsUnlocked WIN32
     src/util.cpp
 )
 
+if (WIN32)
+    add_executable(CapsUnlocked WIN32 ${CAPS_UNLOCKED_SOURCES})
+else()
+    add_executable(CapsUnlocked ${CAPS_UNLOCKED_SOURCES})
+endif()
+
 if(MSVC)
     target_compile_options(CapsUnlocked PRIVATE /W4 /permissive-)
 else()
     target_compile_options(CapsUnlocked PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-target_link_libraries(CapsUnlocked PRIVATE user32 shell32 shlwapi)
+if (WIN32)
+    target_link_libraries(CapsUnlocked PRIVATE user32 shell32)
+elseif(APPLE)
+    target_link_libraries(CapsUnlocked PRIVATE "-framework ApplicationServices" "-framework CoreFoundation")
+endif()

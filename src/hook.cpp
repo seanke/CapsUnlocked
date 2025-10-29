@@ -1,14 +1,18 @@
 #include "hook.h"
 #include "input.h"
-#include <cwctype>
+#include <cctype>
+
+static bool g_capsLayerActive = false;
+static KeyMapping g_layerMap;
+
+void set_mapping(const KeyMapping& map) {
+    g_layerMap = map;
+    g_capsLayerActive = false;
+}
+
+#if defined(_WIN32)
 
 static HHOOK g_hook = nullptr;
-static bool g_capsLayerActive = false;
-static std::unordered_map<UINT, UINT> g_layerMap;
-
-void set_mapping(const std::unordered_map<UINT, UINT>& map) {
-    g_layerMap = map;
-}
 
 static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode < 0) {
@@ -17,23 +21,24 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
 
     const KBDLLHOOKSTRUCT* pkb = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
     const bool isKeyUp = (pkb->flags & LLKHF_UP) != 0;
-    const UINT vk = pkb->vkCode;
+    const KeyCode vk = pkb->vkCode;
 
     if (is_our_injected(*pkb)) {
         return CallNextHookEx(g_hook, nCode, wParam, lParam);
     }
 
-    if (vk == VK_CAPITAL) {
-        if (!isKeyUp) g_capsLayerActive = true; else g_capsLayerActive = false;
+    if (vk == CAPS_LOCK_KEY) {
+        g_capsLayerActive = !isKeyUp;
         return 1; // block default CapsLock behavior
     }
 
     if (g_capsLayerActive) {
         auto it = g_layerMap.find(vk);
         if (it == g_layerMap.end()) {
-            UINT upper = vk;
-            if (vk >= 'a' && vk <= 'z') upper = static_cast<UINT>(std::towupper(static_cast<wchar_t>(vk)));
-            it = g_layerMap.find(upper);
+            if (vk >= 'a' && vk <= 'z') {
+                const KeyCode upper = static_cast<KeyCode>(std::toupper(static_cast<int>(vk)));
+                it = g_layerMap.find(upper);
+            }
         }
         if (it != g_layerMap.end()) {
             send_key(it->second, !isKeyUp);
@@ -56,3 +61,96 @@ void uninstall_hook() {
     }
 }
 
+#else
+
+static CFMachPortRef g_eventTap = nullptr;
+static CFRunLoopSourceRef g_runLoopSource = nullptr;
+
+static CGEventRef EventTapCallback(CGEventTapProxy, CGEventType type, CGEventRef event, void*) {
+    if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
+        if (g_eventTap) {
+            CGEventTapEnable(g_eventTap, true);
+        }
+        return event;
+    }
+
+    if (type == kCGEventFlagsChanged) {
+        const KeyCode vk = static_cast<KeyCode>(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
+        if (vk == CAPS_LOCK_KEY) {
+            const bool down = (CGEventGetFlags(event) & kCGEventFlagMaskAlphaShift) != 0;
+            g_capsLayerActive = down;
+            return nullptr; // swallow to keep caps off
+        }
+        return event;
+    }
+
+    if (type != kCGEventKeyDown && type != kCGEventKeyUp) {
+        return event;
+    }
+
+    if (is_our_injected(event)) {
+        return event;
+    }
+
+    const KeyCode vk = static_cast<KeyCode>(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
+    const bool isKeyDown = (type == kCGEventKeyDown);
+
+    if (vk == CAPS_LOCK_KEY) {
+        g_capsLayerActive = isKeyDown;
+        return nullptr;
+    }
+
+    if (g_capsLayerActive) {
+        const auto it = g_layerMap.find(vk);
+        if (it != g_layerMap.end()) {
+            send_key(it->second, isKeyDown);
+            return nullptr;
+        }
+    }
+    return event;
+}
+
+bool install_hook() {
+    if (g_eventTap) return true;
+
+    const CGEventMask mask =
+        CGEventMaskBit(kCGEventKeyDown) |
+        CGEventMaskBit(kCGEventKeyUp) |
+        CGEventMaskBit(kCGEventFlagsChanged);
+
+    g_eventTap = CGEventTapCreate(kCGSessionEventTap,
+                                  kCGHeadInsertEventTap,
+                                  kCGEventTapOptionDefault,
+                                  mask,
+                                  EventTapCallback,
+                                  nullptr);
+    if (!g_eventTap) {
+        return false;
+    }
+
+    g_runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, g_eventTap, 0);
+    if (!g_runLoopSource) {
+        CFRelease(g_eventTap);
+        g_eventTap = nullptr;
+        return false;
+    }
+
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), g_runLoopSource, kCFRunLoopCommonModes);
+    CGEventTapEnable(g_eventTap, true);
+    return true;
+}
+
+void uninstall_hook() {
+    if (g_runLoopSource) {
+        CFRunLoopRemoveSource(CFRunLoopGetCurrent(), g_runLoopSource, kCFRunLoopCommonModes);
+        CFRelease(g_runLoopSource);
+        g_runLoopSource = nullptr;
+    }
+    if (g_eventTap) {
+        CGEventTapEnable(g_eventTap, false);
+        CFRelease(g_eventTap);
+        g_eventTap = nullptr;
+    }
+}
+
+#endif

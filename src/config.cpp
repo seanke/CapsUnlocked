@@ -1,63 +1,76 @@
 #include "config.h"
 #include "util.h"
-#include <cwchar>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
-static void ensure_default_config(const std::wstring& path) {
-    FILE* f = _wfopen(path.c_str(), L"r, ccs=UTF-8");
-    if (f) { fclose(f); return; }
-    f = _wfopen(path.c_str(), L"w, ccs=UTF-8");
-    if (!f) return;
-    fwprintf(f, L"# CapsUnlocked config\n");
-    fwprintf(f, L"# Map source=target using virtual keys or names.\n");
-    fwprintf(f, L"# Hold CapsLock to activate.\n\n");
-    fwprintf(f, L"h=Left\n");
-    fwprintf(f, L"j=Down\n");
-    fwprintf(f, L"k=Up\n");
-    fwprintf(f, L"l=Right\n");
-    fclose(f);
+namespace {
+
+KeyMapping default_mapping() {
+    KeyMapping map;
+    const KeyCode h = token_to_keycode("H");
+    const KeyCode j = token_to_keycode("J");
+    const KeyCode k = token_to_keycode("K");
+    const KeyCode l = token_to_keycode("L");
+    const KeyCode left = token_to_keycode("Left");
+    const KeyCode down = token_to_keycode("Down");
+    const KeyCode up = token_to_keycode("Up");
+    const KeyCode right = token_to_keycode("Right");
+    if (h && left) map[h] = left;
+    if (j && down) map[j] = down;
+    if (k && up) map[k] = up;
+    if (l && right) map[l] = right;
+    return map;
 }
 
-KeyMap load_config() {
-    std::wstring dir = get_exe_dir();
-    std::wstring cfgPath = dir + L"\\capsunlocked.ini";
-    ensure_default_config(cfgPath);
+void ensure_default_config(const std::filesystem::path& path) {
+    if (std::filesystem::exists(path)) return;
+    std::ofstream out(path);
+    if (!out) return;
+    out << "# CapsUnlocked config\n";
+    out << "# Map source=target using key names or hex codes.\n";
+    out << "# Hold CapsLock to activate.\n\n";
+    out << "h=Left\n";
+    out << "j=Down\n";
+    out << "k=Up\n";
+    out << "l=Right\n";
+}
 
-    KeyMap map;
-    FILE* f = _wfopen(cfgPath.c_str(), L"r, ccs=UTF-8");
-    if (!f) {
-        map[L'H'] = VK_LEFT;
-        map[L'J'] = VK_DOWN;
-        map[L'K'] = VK_UP;
-        map[L'L'] = VK_RIGHT;
-        return map;
+} // namespace
+
+KeyMapping load_config() {
+    const std::filesystem::path dir = get_exe_dir();
+    const std::filesystem::path cfg_path = dir / "capsunlocked.ini";
+    ensure_default_config(cfg_path);
+
+    KeyMapping map;
+    std::ifstream in(cfg_path);
+    if (!in) {
+        return default_mapping();
     }
 
-    wchar_t buf[512];
-    while (fgetws(buf, static_cast<int>(sizeof(buf)/sizeof(buf[0])), f)) {
-        std::wstring line(buf);
+    std::string line;
+    while (std::getline(in, line)) {
         trim(line);
         if (line.empty()) continue;
-        if (line[0] == L'#' || line[0] == L';') continue;
-        size_t eq = line.find(L'=');
-        if (eq == std::wstring::npos) continue;
-        std::wstring left = line.substr(0, eq);
-        std::wstring right = line.substr(eq + 1);
-        trim(left); trim(right);
+        const char first = line.front();
+        if (first == '#' || first == ';') continue;
+        const std::size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        std::string left = line.substr(0, eq);
+        std::string right = line.substr(eq + 1);
+        trim(left);
+        trim(right);
         if (left.empty() || right.empty()) continue;
-        UINT src = token_to_vk(left);
-        UINT dst = token_to_vk(right);
+        const KeyCode src = token_to_keycode(left);
+        const KeyCode dst = token_to_keycode(right);
         if (src != 0 && dst != 0) {
             map[src] = dst;
         }
     }
-    fclose(f);
 
     if (map.empty()) {
-        map[L'H'] = VK_LEFT;
-        map[L'J'] = VK_DOWN;
-        map[L'K'] = VK_UP;
-        map[L'L'] = VK_RIGHT;
+        map = default_mapping();
     }
     return map;
 }
-
