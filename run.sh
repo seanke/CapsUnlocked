@@ -7,7 +7,7 @@ BIN="${BUILD_DIR}/hello"
 
 mkdir -p "${BUILD_DIR}"
 
-echo "Compiling Hello World..."
+echo "Compiling..."
 clang++ -std=c++17 "${SCRIPT_DIR}/src/main.cpp" -o "${BIN}"
 
 echo "Running:"
