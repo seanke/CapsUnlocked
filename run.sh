@@ -3,12 +3,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build"
-BIN="${BUILD_DIR}/hello"
+CONFIG="${1:-Release}"
 
-mkdir -p "${BUILD_DIR}"
+cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE="${CONFIG}"
+cmake --build "${BUILD_DIR}" --config "${CONFIG}"
 
-echo "Compiling..."
-clang++ -std=c++17 "${SCRIPT_DIR}/src/main.cpp" -o "${BIN}"
+BIN_NAME="CapsUnlocked"
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+  EXECUTABLE_PATH="${BUILD_DIR}/${CONFIG}/${BIN_NAME}.exe"
+else
+  EXECUTABLE_PATH="${BUILD_DIR}/${BIN_NAME}"
+fi
 
-echo "Running:"
-exec "${BIN}"
+echo "Running ${EXECUTABLE_PATH}..."
+exec "${EXECUTABLE_PATH}"
