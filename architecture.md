@@ -1,73 +1,61 @@
-## High-Level Architecture
+# Architecture Overview
 
-### Core Concepts
-- CapsUnlocked models CapsLock as a momentary modifier that activates a second keyboard layer.
-- Platform-neutral services (config parsing, mapping resolution, overlay data modeling) live under `src/core/`.
-- Platform-specific shims in `src/platform/<os>/` capture keyboard input, suppress native CapsLock behavior, and emit mapped events.
-- The primary `main()` (per-platform target) wires core services to the OS adapters, keeping orchestration explicit and testable.
+CapsUnlocked is split into a platform-neutral core and thin platform adapters for Windows and macOS. The current codebase contains scaffolding (logging only) plus TODO notes that describe the future implementation work.
 
-### Module Layout
+## Core Library (`src/core/`)
 
-#### Core Library (`src/core/`)
-- `config/`: parses `capsunlocked.ini`, resolves textual identifiers to abstract key tokens.
-- `mapping/`: owns layer state, key translation tables, and lookups.
-- `overlay/`: formats the mapping list for presentation, independent of UI toolkit.
-- `layer_controller/`: state machine for layer activation, double-tap detection, and key swallowing rules.
+| Component | Responsibility | Key TODOs |
+| --- | --- | --- |
+| `config/config_loader.{h,cpp}` | Load `capsunlocked.ini`, parse per-layer mappings, expose a human-readable summary. | Parse INI data, watch for changes, notify dependents. |
+| `mapping/mapping_engine.{h,cpp}` | Hold the resolved mapping tables and answer lookup requests when the Caps layer is active. | Build efficient lookup structures, translate key tokens into actions. |
+| `overlay/overlay_model.{h,cpp}` | Prepare overlay-friendly data (key → action rows) and track visibility state. | Maintain cached rows, notify platform views when shown/hidden. |
+| `layer/layer_controller.{h,cpp}` | Manage CapsLock state, drive mapping lookups, coordinate overlay toggling, and swallow unmapped keys. | Handle double-tap detection, fire mapped actions, react to config changes. |
+| `app_context.{h,cpp}` | Wire the four services together and provide accessors for platform code; orchestrate initialisation. | Propagate config reloads to mapping/overlay, persist shared state. |
 
-These units expose C++ interfaces that accept simple inputs (key tokens, timestamps) so they can be unit tested without OS hooks.
+The core is compiled into the `caps_core` static library and is intended to be unit-testable without OS hooks.
 
-#### Platform Adapters (`src/platform/windows/`, `src/platform/macos/`)
-- `keyboard_hook.cpp`: bridges OS events to `layer_controller`, translating keycodes to core tokens and suppressing native behavior.
-- `output.cpp`: emits synthetic key events or overlay invocations via platform APIs.
-- `overlay_view.cpp`: renders the overlay using native UI primitives but pulls data from the core overlay model.
+## Platform Adapters
 
-Adapters implement thin wrappers around platform APIs. They depend only on the abstractions defined in the core library.
+### macOS (`src/platform/macos/`)
 
-#### Entry Points (`src/windows_main.cpp`, `src/macos_main.cpp`)
-- Create the shared `AppContext` (config loader, layer controller, overlay model).
-- Initialize the matching platform adapter and register callbacks.
-- Start the platform run loop (message pump on Windows, CFRunLoop on macOS).
-- Provide a single orchestration location so platform-specific glue is easy to follow.
+- `keyboard_hook.{h,cpp}` – will own the CGEvent tap plus IOHID listener so CapsLock events are still seen when the key is remapped to “No Action.”
+- `output.{h,cpp}` – will convert mapped actions into `CGEvent` sequences.
+- `overlay_view.{h,cpp}` – will render a transparent panel listing the active mappings.
+- `platform_app.{h,cpp}` – orchestrates the adapter: installs hooks, enters the `CFRunLoop`, coordinates overlay lifecycle, and shuts everything down.
 
-### Layer Activation Flow
-1. Platform hook reports CapsLock press to `layer_controller`.
-2. Controller raises the “layer active” flag and notifies the mapping engine.
-3. Subsequent key events are converted to core tokens and routed to the mapping engine.
-4. If a mapping exists, `output::emit_mapped_event` is invoked; otherwise the platform adapter swallows the key.
-5. CapsLock release clears the layer flag and adapters resume pass-through delivery.
-6. Double-tap detections from the controller trigger overlay show/hide calls via `overlay_view`.
+Each file currently logs its activity and contains explicit TODO comments describing the missing CGEvent/CFRunLoop work.
 
-### Component Breakdown
+### Windows (`src/platform/windows/`)
 
-#### Config Loader (core)
-- Parses `capsunlocked.ini` into normalized key identifiers.
-- Emits abstract key tokens that remain stable across platforms.
-- Provides query APIs for `(modifier, key)` lookups, enabling headless unit tests.
+- `keyboard_hook.{h,cpp}` – will install a `WH_KEYBOARD_LL` hook and translate Win32 messages into core events.
+- `output.{h,cpp}` – will emit mapped actions via `SendInput`.
+- `overlay_view.{h,cpp}` – will draw the overlay using a layered or transparent window.
+- `platform_app.{h,cpp}` – will own the Win32 message loop, manage hook lifetime, and handle shutdown.
 
-#### Event Hook (platform)
-- Windows: low-level keyboard hook (`WH_KEYBOARD_LL`) converts Win32 virtual key codes to core tokens and forwards them.
-- macOS: CGEvent tap plus IOHID listener converts CGKeyCodes to tokens and suppresses native CapsLock behavior.
-- Both adapters defer double-tap timing to the shared controller, keeping stateful logic out of OS code.
+Like macOS, the files are currently stubs that log behaviour and list TODOs for the real Win32 implementation.
 
-#### Overlay Presenter
-- Core overlay model prepares display rows (key + target + description).
-- Platform view renders using native UI frameworks but consumes only model data, so the model can be unit tested.
+Both platform directories are compiled into `caps_platform` (platform-specific) static libraries that link against `caps_core`.
 
-#### HID Supplement (macOS)
-- IOHIDManager listener tracks raw CapsLock usage so mappings still work when the OS remaps CapsLock to “No Action.”
-- Feeds CapsLock state back into the shared layer flag without relying on system toggles.
+## Entry Points
 
-### Threading & Run Loop
-- Windows: message loop tied to the tray window pumps hook callbacks and overlay UI; adapters dispatch into core synchronously.
-- macOS: CFRunLoop hosts CGEvent tap, HID callbacks, and overlay updates.
-- Core components are thread-agnostic; adapters ensure calls occur on the appropriate thread and never block hook callbacks.
+- `src/macos_main.cpp` – Creates an `AppContext`, initialises it with the config path, constructs the macOS `PlatformApp`, and runs it.
+- `src/windows_main.cpp` (guarded by `_WIN32`) – Equivalent bootstrapping for Windows via `wmain`.
 
-### Test Strategy
-- Core modules (`config`, `mapping`, `layer_controller`, `overlay`) expose header-only interfaces and are compiled into a static library for unit tests.
-- Platform adapters are exercised via integration tests or manual experiments, while thin wrappers minimize untestable logic.
-- Use dependency injection in entry points (e.g., pass `std::unique_ptr<LayerController>` into adapter constructors) so mocks can be substituted in tests.
+Each entry point includes TODOs to expand CLI handling (config overrides, diagnostics) before handing control to the platform layer.
 
-### Planned Extensions
-- Configurable overlay themes and keyboard visualization.
-- Multiple layers with different modifiers (e.g. CapsLock vs. CapsLock+Shift).
-- Optional pass-through fallback where unmapped keys emit their original input.
+## Build & Run
+
+- `CMakeLists.txt` defines `caps_core`, `caps_platform`, and the final `CapsUnlocked` executable for the active platform.
+- `run.sh` configures and builds the project (default Release) and launches the resulting binary, making it easy to test the scaffold.
+
+## Execution Flow (Skeleton)
+
+1. Entry point initialises `AppContext`, which in turn instantiates the core services and logs diagnostics.
+2. Platform `PlatformApp` installs a placeholder keyboard hook, then simulates CapsLock and mapped key events.
+3. `LayerController` logs the active/inactive transitions and mapping resolutions.
+4. Overlay components log show/hide behaviour.
+5. Platform app shuts down, releasing stub resources.
+
+As real implementations replace the logging stubs, the control flow will remain the same: platform adapters capture hardware events, forward them into the core, and use core responses to emit actions or update overlays.
+
+Consult the TODO comments in each `.cpp` file for detailed implementation guidance. Once those TODOs are addressed, CapsUnlocked will deliver the feature set described in `features.md` (configurable Caps layer, overlay on double-tap, unmapped key suppression, etc.).
