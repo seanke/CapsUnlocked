@@ -14,6 +14,8 @@ file(GLOB_RECURSE CAPS_CORE_SOURCES
 add_library(caps_core STATIC ${CAPS_CORE_SOURCES})
 target_include_directories(caps_core PUBLIC src)
 
+include(CTest)
+
 if (WIN32)
     file(GLOB_RECURSE CAPS_PLATFORM_SOURCES
         CONFIGURE_DEPENDS
@@ -46,4 +48,25 @@ if(MSVC)
 else()
     target_compile_options(caps_core PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(caps_platform PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+if (BUILD_TESTING)
+    find_package(GTest CONFIG QUIET)
+    if (NOT GTest_FOUND)
+        find_package(GTest REQUIRED)
+    endif()
+
+    add_executable(caps_core_tests
+        tests/core/hello_test.cpp
+    )
+    target_link_libraries(caps_core_tests PRIVATE caps_core GTest::gtest_main)
+
+    if (MSVC)
+        target_compile_options(caps_core_tests PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(caps_core_tests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    include(GoogleTest)
+    gtest_discover_tests(caps_core_tests)
 endif()
