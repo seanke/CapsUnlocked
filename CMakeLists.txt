@@ -57,6 +57,7 @@ if (BUILD_TESTING)
     endif()
 
     add_executable(caps_core_tests
+        tests/core/config_loader_test.cpp
         tests/core/hello_test.cpp
     )
     target_link_libraries(caps_core_tests PRIVATE caps_core GTest::gtest_main)
