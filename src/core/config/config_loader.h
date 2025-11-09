@@ -5,13 +5,18 @@
 
 namespace caps::core {
 
+// Loads key remap definitions from disk and keeps a normalized copy that the
+// rest of the core can query without touching the filesystem again.
 class ConfigLoader {
 public:
     using MappingTable = std::map<std::string, std::string>;
 
     ConfigLoader();
 
+    // Reads mappings from the provided path, falling back to defaults when the
+    // file is missing. Throws if the file exists but contains invalid syntax.
     void Load(const std::string& path);
+    // Re-reads the last successfully loaded file. Useful for hot-reload workflows.
     void Reload();
 
     [[nodiscard]] const MappingTable& Mappings() const;

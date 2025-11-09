@@ -11,20 +11,24 @@ LayerController::LayerController(MappingEngine& mapping,
                                  OverlayModel& overlay)
     : mapping_(mapping), overlay_(overlay) {}
 
+// Platform adapters provide a callback that emits mapped actions when the layer is active.
 void LayerController::SetActionCallback(ActionCallback callback) {
     action_callback_ = std::move(callback);
 }
 
+// Called whenever CapsLock is held down; activates the layer and hides the overlay if present.
 void LayerController::OnCapsLockPressed() {
     layer_active_ = true;
     overlay_.Hide();
 }
 
+// Called when CapsLock is released; deactivates the layer and dismisses overlays.
 void LayerController::OnCapsLockReleased() {
     layer_active_ = false;
     overlay_.Hide();
 }
 
+// Routes key events through the mapping table and fires the synthetic action callback.
 bool LayerController::OnKeyEvent(const KeyEvent& event) {
     if (!layer_active_) {
         return false;
@@ -36,11 +40,13 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
     }
 
     if (action_callback_) {
+        // Notify the platform adapter so it can emit synthetic events immediately.
         action_callback_(*mapping, event.pressed);
     }
     return true;
 }
 
+// Double-tapping CapsLock is interpreted as a request to show the reference overlay.
 void LayerController::OnDoubleTapCapsLock() {
     overlay_.Show();
 }

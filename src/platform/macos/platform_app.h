@@ -15,6 +15,7 @@ class AppContext;
 
 namespace caps::platform::macos {
 
+// macOS entry adapter: wires hooks/output/overlay together and runs the CFRunLoop.
 class PlatformApp {
 public:
     explicit PlatformApp(core::AppContext& context);
@@ -25,9 +26,9 @@ public:
 
 private:
     core::AppContext& context_;
-    std::unique_ptr<KeyboardHook> keyboard_hook_;
-    std::unique_ptr<Output> output_;
-    std::unique_ptr<OverlayView> overlay_view_;
+    std::unique_ptr<KeyboardHook> keyboard_hook_; // Captures hardware events.
+    std::unique_ptr<Output> output_;              // Emits mapped CGEvents.
+    std::unique_ptr<OverlayView> overlay_view_;   // Shows mapping overlay upon request.
     CFRunLoopRef run_loop_{nullptr};
 };
 

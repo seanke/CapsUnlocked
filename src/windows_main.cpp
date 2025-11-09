@@ -15,6 +15,7 @@ int wmain(int argc, wchar_t* argv[]) {
     std::string config_path = "capsunlocked.ini";
     if (argc > 1 && argv[1]) {
         std::wstring wide_path(argv[1]);
+        // Convert the wide CLI argument into UTF-8 so ConfigLoader can read it.
         config_path.assign(wide_path.begin(), wide_path.end());
     }
     // TODO: Support command-line flags for config overrides and diagnostic modes.

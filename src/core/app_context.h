@@ -9,10 +9,13 @@
 
 namespace caps::core {
 
+// Owns the lifetime of all core services so platform adapters can grab references
+// without worrying about construction order.
 class AppContext {
 public:
     AppContext();
 
+    // Loads the config, initializes dependent services, and wires them together.
     void Initialize(const std::string& config_path);
 
     ConfigLoader& Config();

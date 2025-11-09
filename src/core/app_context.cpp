@@ -18,11 +18,15 @@ AppContext::AppContext()
     std::cout << "[AppContext] Context constructed" << std::endl;
 }
 
+// Platform main() calls this once after picking a config path to wire everything up.
 void AppContext::Initialize(const std::string& config_path) {
     std::cout << "[AppContext] Initializing with config " << config_path << std::endl;
+    // Step 1: read the INI file so downstream services can see the new mappings.
     config_loader_.Load(config_path);
+    // Step 2: ensure the mapping engine has fresh caches before it serves lookups.
     mapping_engine_.Initialize();
     mapping_engine_.UpdateFromConfig();
+    // Step 3: snapshot the mapping list for overlay rendering.
     overlay_model_.BindMappings(mapping_engine_);
     // TODO: Wire config change notifications to mapping/overlay and persist context state.
 }

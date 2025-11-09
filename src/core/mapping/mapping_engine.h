@@ -10,11 +10,16 @@
 
 namespace caps::core {
 
+// Lightweight view over ConfigLoader that exposes fast lookups and cached rows
+// for the overlay without re-reading the INI file.
 class MappingEngine {
 public:
     explicit MappingEngine(const ConfigLoader& config);
 
+    // Initializes internal caches. Split so callers can create the object before
+    // the config path is known.
     void Initialize();
+    // Rebuilds the lookup table after ConfigLoader reloads.
     void UpdateFromConfig();
 
     [[nodiscard]] std::optional<std::string> ResolveMapping(const std::string& key) const;

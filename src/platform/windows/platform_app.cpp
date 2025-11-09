@@ -21,6 +21,7 @@ PlatformApp::PlatformApp(core::AppContext& context)
       output_(std::make_unique<Output>()),
       overlay_view_(std::make_unique<OverlayView>(context.Overlay())) {}
 
+// Establishes hooks and wiring so mapped actions get emitted via Output.
 void PlatformApp::Initialize() {
     std::cout << "[Windows::PlatformApp] Initializing platform app" << std::endl;
     keyboard_hook_->Install(context_.Layer());
@@ -29,12 +30,14 @@ void PlatformApp::Initialize() {
     // TODO: Load configuration, set up message loop, register overlay hotkeys.
 }
 
+// Placeholder run-loop stub; real implementation will pump Win32 messages.
 void PlatformApp::Run() {
     std::cout << "[Windows::PlatformApp] Running message loop stub" << std::endl;
     keyboard_hook_->StartListening();
     // TODO: Pump Windows messages until shutdown is requested.
 }
 
+// Cleans up hook state so Windows releases our low-level listeners cleanly.
 void PlatformApp::Shutdown() {
     std::cout << "[Windows::PlatformApp] Shutting down platform app" << std::endl;
     keyboard_hook_->StopListening();

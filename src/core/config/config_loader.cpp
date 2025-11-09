@@ -10,6 +10,7 @@ namespace caps::core {
 
 namespace {
 
+// Returns true if the current line begins with comment prefixes after trimming.
 bool IsComment(const std::string& line) {
     for (char ch : line) {
         if (std::isspace(static_cast<unsigned char>(ch))) {
@@ -25,11 +26,13 @@ bool IsComment(const std::string& line) {
 ConfigLoader::ConfigLoader()
     : mappings_(BuildDefaultMappings()) {}
 
+// Reads the config at `path`, remembering it so Reload() can reuse the same source.
 void ConfigLoader::Load(const std::string& path) {
     config_path_ = path;
     mappings_ = ParseConfigFile(path);
 }
 
+// Convenience helper for hot-reloads; uses the last path passed into Load().
 void ConfigLoader::Reload() {
     if (config_path_.empty()) {
         throw std::runtime_error("ConfigLoader::Reload called before Load");
@@ -42,6 +45,7 @@ const ConfigLoader::MappingTable& ConfigLoader::Mappings() const {
     return mappings_;
 }
 
+// Produces a quick human-readable summary that is handy for logging and debugging.
 std::string ConfigLoader::Describe() const {
     std::ostringstream output;
     output << "Config (" << mappings_.size() << " entries)";
@@ -51,6 +55,7 @@ std::string ConfigLoader::Describe() const {
     return output.str();
 }
 
+// Opens the ini file, parses `key=value` rows, and returns a normalized map.
 ConfigLoader::MappingTable ConfigLoader::ParseConfigFile(const std::string& path) const {
     std::ifstream stream(path);
     if (!stream.is_open()) {
@@ -75,6 +80,7 @@ ConfigLoader::MappingTable ConfigLoader::ParseConfigFile(const std::string& path
         const std::string left = trimmed.substr(0, separator);
         const std::string right = trimmed.substr(separator + 1);
 
+        // Normalize both halves so the lookup table stays case-insensitive.
         const std::string source = NormalizeKeyToken(left);
         const std::string target = NormalizeKeyToken(right);
 
@@ -88,6 +94,7 @@ ConfigLoader::MappingTable ConfigLoader::ParseConfigFile(const std::string& path
     return parsed;
 }
 
+// Default vim-style arrows that keep the product useful when no config exists.
 ConfigLoader::MappingTable ConfigLoader::BuildDefaultMappings() {
     return {
         {"H", "LEFT"},
@@ -97,6 +104,7 @@ ConfigLoader::MappingTable ConfigLoader::BuildDefaultMappings() {
     };
 }
 
+// Uppercases and strips whitespace so that config lookups become case-insensitive.
 std::string ConfigLoader::NormalizeKeyToken(const std::string& token) {
     const std::string trimmed = Trim(token);
     if (trimmed.empty()) {
@@ -131,6 +139,7 @@ std::string ConfigLoader::NormalizeKeyToken(const std::string& token) {
     return normalized;
 }
 
+// Minimal std::string trim helper that avoids pulling in boost/Qt/etc.
 std::string ConfigLoader::Trim(const std::string& value) {
     const auto begin = std::find_if_not(value.begin(), value.end(), [](unsigned char ch) {
         return std::isspace(ch) != 0;

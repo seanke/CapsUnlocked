@@ -10,14 +10,17 @@ void OverlayModel::BindMappings(const MappingEngine& engine) {
     entries_ = engine.EnumerateMappings();
 }
 
+// Called when CapsLock is double-tapped so the UI knows to show the reference sheet.
 void OverlayModel::Show() {
     visible_ = true;
 }
 
+// Lets the platform view dismiss the overlay when CapsLock is pressed again.
 void OverlayModel::Hide() {
     visible_ = false;
 }
 
+// Simple textual dump that is handy while developing without a UI.
 std::string OverlayModel::Describe() const {
     std::ostringstream output;
     output << (visible_ ? "overlay:visible" : "overlay:hidden");

@@ -16,6 +16,9 @@ namespace caps::platform::macos {
 
 namespace {
 
+// Lightweight helpers that convert human-friendly config tokens into the CGKeyCode
+// values expected by CGEventCreateKeyboardEvent.
+
 std::string NormalizeToken(const std::string& token) {
     std::string normalized;
     normalized.reserve(token.size());
@@ -28,6 +31,7 @@ std::string NormalizeToken(const std::string& token) {
     return normalized;
 }
 
+// Maps ASCII letters to CGKeyCode constants.
 std::optional<CGKeyCode> LookupLetter(char letter) {
     static const std::unordered_map<char, CGKeyCode> kLetterMap = {
         {'A', kVK_ANSI_A}, {'B', kVK_ANSI_B}, {'C', kVK_ANSI_C}, {'D', kVK_ANSI_D}, {'E', kVK_ANSI_E},
@@ -45,6 +49,7 @@ std::optional<CGKeyCode> LookupLetter(char letter) {
     return std::nullopt;
 }
 
+// Handles named keys such as arrow/home/end plus single characters.
 std::optional<CGKeyCode> LookupNamedKey(const std::string& token) {
     static const std::unordered_map<std::string, CGKeyCode> kNamedKeys = {
         {"LEFT", kVK_LeftArrow},     {"RIGHT", kVK_RightArrow}, {"UP", kVK_UpArrow},
@@ -70,6 +75,7 @@ std::optional<CGKeyCode> LookupNamedKey(const std::string& token) {
     return std::nullopt;
 }
 
+// Normalizes any supported token (letters, names, or hex key codes).
 std::optional<CGKeyCode> LookupKeyCode(const std::string& action) {
     const std::string normalized = NormalizeToken(action);
 
@@ -87,6 +93,7 @@ std::optional<CGKeyCode> LookupKeyCode(const std::string& action) {
 
 } // namespace
 
+// Emits a synthetic key press/release corresponding to the mapped action string.
 void Output::Emit(const std::string& action, bool pressed) {
     const auto key_code = LookupKeyCode(action);
     if (!key_code) {
@@ -101,6 +108,7 @@ void Output::Emit(const std::string& action, bool pressed) {
     }
 
     CGEventSetIntegerValueField(event, kCGEventSourceUserData, kSyntheticEventTag);
+    // Fire the event at the HID tap so it behaves like real hardware input.
     CGEventPost(kCGHIDEventTap, event);
     CFRelease(event);
 }

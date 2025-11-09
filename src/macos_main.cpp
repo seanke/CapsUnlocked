@@ -12,6 +12,7 @@ int main(int argc, char* argv[]) {
 
     std::string config_path = "capsunlocked.ini";
     if (argc > 1) {
+        // Allow overriding the config path via CLI for demos/tests.
         config_path = argv[1];
     }
     // TODO: Surface CLI options (e.g., config override, diagnostics) and handle errors.

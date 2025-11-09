@@ -13,6 +13,7 @@ class AppContext;
 
 namespace caps::platform::windows {
 
+// Windows twin to the mac adapter; currently scaffolding but documents lifecycle.
 class PlatformApp {
 public:
     explicit PlatformApp(core::AppContext& context);

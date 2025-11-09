@@ -22,6 +22,7 @@ PlatformApp::PlatformApp(core::AppContext& context)
       output_(std::make_unique<Output>()),
       overlay_view_(std::make_unique<OverlayView>(context.Overlay())) {}
 
+// Installs hooks and wires callbacks. Throws if the user has not granted permissions.
 void PlatformApp::Initialize() {
     std::cout << "[macOS::PlatformApp] Initializing platform app" << std::endl;
     if (!keyboard_hook_->Install(context_.Layer())) {
@@ -29,23 +30,28 @@ void PlatformApp::Initialize() {
             "CapsUnlocked needs Accessibility/Input Monitoring permission. Enable it in "
             "System Settings → Privacy & Security → Input Monitoring and restart the app.");
     }
+    // When the layer resolves a mapping, immediately emit the CGEvent via Output.
     context_.Layer().SetActionCallback(
         [this](const std::string& action, bool pressed) { output_->Emit(action, pressed); });
 }
 
+// Starts listening for events and blocks inside CFRunLoopRun() until Shutdown() is called.
 void PlatformApp::Run() {
     std::cout << "[macOS::PlatformApp] Entering run loop" << std::endl;
     run_loop_ = CFRunLoopGetCurrent();
+    // After the hook is armed we block in CFRunLoopRun() until Shutdown() stops it.
     keyboard_hook_->StartListening();
     CFRunLoopRun();
 }
 
+// Stops the run loop, tears down hooks, and hides any overlay that might be showing.
 void PlatformApp::Shutdown() {
     std::cout << "[macOS::PlatformApp] Shutting down platform app" << std::endl;
     if (run_loop_) {
         CFRunLoopStop(run_loop_);
         run_loop_ = nullptr;
     }
+    // StopListening tears down the event tap and IOHID manager before exiting.
     keyboard_hook_->StopListening();
     overlay_view_->Hide();
 }

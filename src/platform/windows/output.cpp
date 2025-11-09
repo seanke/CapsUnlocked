@@ -4,6 +4,7 @@
 
 namespace caps::platform::windows {
 
+// Logs the mapped action for now; real implementation will use SendInput.
 void Output::Emit(const std::string& action, bool pressed) {
     std::cout << "[Windows::Output] Emitting action " << action
               << " pressed=" << std::boolalpha << pressed << std::endl;

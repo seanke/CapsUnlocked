@@ -20,6 +20,7 @@ KeyboardHook::~KeyboardHook() {
     StopListening();
 }
 
+// Builds the event tap + IOHID monitor so the platform app can start listening.
 bool KeyboardHook::Install(core::LayerController& controller) {
     controller_ = &controller;
 
@@ -51,6 +52,8 @@ bool KeyboardHook::Install(core::LayerController& controller) {
         std::cerr << "[macOS::KeyboardHook] Failed to create HID-level event tap; "
                      "falling back to session tap (may not block elevated apps)."
                   << std::endl;
+        // kCGSessionEventTap works without Input Monitoring but cannot intercept events targeted
+        // at higher-privilege apps. Still better than failing outright.
         event_tap_ = CGEventTapCreate(kCGSessionEventTap,
                                       kCGHeadInsertEventTap,
                                       kCGEventTapOptionDefault,
@@ -83,16 +86,19 @@ bool KeyboardHook::Install(core::LayerController& controller) {
     return true;
 }
 
+// Registers the tap with the caller's run loop and opens IOHID streams.
 void KeyboardHook::StartListening() {
     if (!event_tap_ || !run_loop_source_) {
         return;
     }
 
     scheduled_run_loop_ = CFRunLoopGetCurrent();
+    // Register the CGEvent tap with the caller's run loop so events start flowing.
     CFRunLoopAddSource(scheduled_run_loop_, run_loop_source_, kCFRunLoopCommonModes);
     CGEventTapEnable(event_tap_, true);
 
     if (hid_manager_) {
+        // IOHID callbacks run on whichever loop we schedule them on; keep it aligned with CGEvents.
         IOHIDManagerScheduleWithRunLoop(hid_manager_, scheduled_run_loop_, kCFRunLoopDefaultMode);
         hid_scheduled_ = true;
 
@@ -107,10 +113,12 @@ void KeyboardHook::StartListening() {
     }
 }
 
+// Tears down CGEvent/IOHID resources. Safe to call even if StartListening never ran.
 void KeyboardHook::StopListening() {
     ShutdownHIDMonitor();
 
     if (run_loop_source_ && scheduled_run_loop_) {
+        // Undo the registration we performed in StartListening().
         CFRunLoopRemoveSource(scheduled_run_loop_, run_loop_source_, kCFRunLoopCommonModes);
         CFRelease(run_loop_source_);
         run_loop_source_ = nullptr;
@@ -133,6 +141,7 @@ CGEventRef KeyboardHook::EventCallback(CGEventTapProxy, CGEventType type, CGEven
 
     if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
         if (self->event_tap_) {
+            // Event taps occasionally auto-disable; flip it back on.
             CGEventTapEnable(self->event_tap_, true);
         }
         return event;
@@ -141,12 +150,15 @@ CGEventRef KeyboardHook::EventCallback(CGEventTapProxy, CGEventType type, CGEven
     return self->HandleEvent(event, type);
 }
 
+// Dispatches every incoming CGEvent through CapsLock + key handlers, swallowing ones
+// the layer controller consumes.
 CGEventRef KeyboardHook::HandleEvent(CGEventRef event, CGEventType type) {
     if (!controller_) {
         return event;
     }
 
     if (event) {
+        // Ignore CGEvents tagged by Output::Emit so we do not swallow our own synth events.
         const int64_t tag = CGEventGetIntegerValueField(event, kCGEventSourceUserData);
         if (tag == kSyntheticEventTag) {
             return event; // allow synthetic events we emitted to pass through untouched
@@ -176,6 +188,7 @@ CGEventRef KeyboardHook::HandleEvent(CGEventRef event, CGEventType type) {
     return event;
 }
 
+// Tracks CapsLock press/release transitions when macOS still reports them via CGEvent taps.
 bool KeyboardHook::HandleCapsLock(CGEventRef event) {
     const CGKeyCode keycode =
         static_cast<CGKeyCode>(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
@@ -188,6 +201,7 @@ bool KeyboardHook::HandleCapsLock(CGEventRef event) {
     return true;
 }
 
+// Forwards key events into the layer controller and swallows them when handled.
 bool KeyboardHook::HandleKey(CGEventRef event, bool pressed) {
     const CGKeyCode keycode =
         static_cast<CGKeyCode>(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
@@ -198,9 +212,11 @@ bool KeyboardHook::HandleKey(CGEventRef event, bool pressed) {
 
     const std::string token = ExtractKeyToken(event);
     if (token.empty()) {
+        // We failed to derive a printable token; let the system handle the key.
         return false;
     }
 
+    // Forward into the shared controller so it can decide whether to emit a mapping.
     core::KeyEvent key_event{token, pressed};
     return controller_->OnKeyEvent(key_event);
 }
@@ -216,6 +232,7 @@ std::string KeyboardHook::ExtractKeyToken(CGEventRef event) {
             if (std::isalpha(static_cast<unsigned char>(ascii))) {
                 ascii = static_cast<char>(std::toupper(static_cast<unsigned char>(ascii)));
             }
+            // Printable ASCII keys can be expressed directly (e.g., "H").
             return std::string(1, ascii);
         }
     }
@@ -224,6 +241,7 @@ std::string KeyboardHook::ExtractKeyToken(CGEventRef event) {
         static_cast<unsigned int>(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
 
     std::ostringstream token;
+    // For non-printable keys, expose the raw keycode so configs can reference it via hex.
     token << "0X" << std::uppercase << std::hex << keycode;
     return token.str();
 }
@@ -233,6 +251,7 @@ void KeyboardHook::UpdateCapsLockState(bool pressed) {
         return;
     }
 
+    // Transition edge detected; forward state change into the shared controller.
     capslock_down_ = pressed;
     if (!controller_) {
         return;
@@ -245,12 +264,14 @@ void KeyboardHook::UpdateCapsLockState(bool pressed) {
     }
 }
 
+// IOHIDManager gives us CapsLock state even when macOS remaps the key to "No Action".
 bool KeyboardHook::InitializeHIDMonitor() {
     hid_manager_ = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
     if (!hid_manager_) {
         return false;
     }
 
+    // Match every attached keyboard so CapsLock events surface even if the key is remapped.
     CFMutableDictionaryRef keyboard_match =
         CreateDeviceMatchingDict(kHIDPage_GenericDesktop, kHIDUsage_GD_Keyboard);
     if (keyboard_match) {
@@ -273,6 +294,7 @@ void KeyboardHook::ShutdownHIDMonitor() {
     }
 
     if (hid_scheduled_ && scheduled_run_loop_) {
+        // Remove the HID callbacks from whichever loop they were attached to.
         IOHIDManagerUnscheduleFromRunLoop(hid_manager_, scheduled_run_loop_, kCFRunLoopDefaultMode);
     }
     if (hid_open_) {
@@ -290,9 +312,11 @@ void KeyboardHook::HidInputCallback(void* context, IOReturn result, void*, IOHID
     if (!self) {
         return;
     }
+    // Forward into the instance so we can reuse UpdateCapsLockState().
     self->HandleHidValue(result, value);
 }
 
+// Invoked on the IOHID thread whenever any keyboard element changes; we filter for CapsLock.
 void KeyboardHook::HandleHidValue(IOReturn result, IOHIDValueRef value) {
     if (result != kIOReturnSuccess || !value) {
         return;
@@ -360,6 +384,7 @@ bool KeyboardHook::EnsureAccessibilityPrivileges() const {
         return AXIsProcessTrusted();
     }
 
+    // Passing kAXTrustedCheckOptionPrompt=true automatically triggers the macOS permission dialog.
     const bool trusted = AXIsProcessTrustedWithOptions(options);
     CFRelease(options);
     return trusted;
@@ -369,6 +394,7 @@ bool KeyboardHook::EnsureInputMonitoringPrivileges() const {
 #if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 101500) && \
     defined(kIOHIDRequestTypeListenEvent) && defined(kIOHIDAccessTypeGranted)
     if (&IOHIDCheckAccess != nullptr) {
+        // IOHIDCheckAccess returns whether the user granted "Input Monitoring" for this process.
         return IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted;
     }
 #endif
