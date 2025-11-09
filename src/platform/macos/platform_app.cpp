@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <memory>
+#include <stdexcept>
 
 #include "core/app_context.h"
 #include "core/layer/layer_controller.h"
@@ -23,22 +24,30 @@ PlatformApp::PlatformApp(core::AppContext& context)
 
 void PlatformApp::Initialize() {
     std::cout << "[macOS::PlatformApp] Initializing platform app" << std::endl;
-    keyboard_hook_->Install(context_.Layer());
-    // TODO: Validate permissions, prime overlay resources, and watch config changes.
+    if (!keyboard_hook_->Install(context_.Layer())) {
+        throw std::runtime_error(
+            "CapsUnlocked needs Accessibility/Input Monitoring permission. Enable it in "
+            "System Settings → Privacy & Security → Input Monitoring and restart the app.");
+    }
+    context_.Layer().SetActionCallback(
+        [this](const std::string& action, bool pressed) { output_->Emit(action, pressed); });
 }
 
 void PlatformApp::Run() {
-    std::cout << "[macOS::PlatformApp] Entering run loop stub" << std::endl;
+    std::cout << "[macOS::PlatformApp] Entering run loop" << std::endl;
+    run_loop_ = CFRunLoopGetCurrent();
     keyboard_hook_->StartListening();
-    output_->Emit("simulate-arrow-down");
-    // TODO: Enter CFRunLoopRun and process lifecycle events until shutdown.
+    CFRunLoopRun();
 }
 
 void PlatformApp::Shutdown() {
     std::cout << "[macOS::PlatformApp] Shutting down platform app" << std::endl;
+    if (run_loop_) {
+        CFRunLoopStop(run_loop_);
+        run_loop_ = nullptr;
+    }
     keyboard_hook_->StopListening();
     overlay_view_->Hide();
-    // TODO: Stop CFRunLoop, release event taps, and dispose of overlay resources.
 }
 
 } // namespace caps::platform::macos

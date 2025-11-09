@@ -1,5 +1,7 @@
 #pragma once
 
+#include <CoreFoundation/CoreFoundation.h>
+
 #include <memory>
 #include <string>
 
@@ -26,6 +28,7 @@ private:
     std::unique_ptr<KeyboardHook> keyboard_hook_;
     std::unique_ptr<Output> output_;
     std::unique_ptr<OverlayView> overlay_view_;
+    CFRunLoopRef run_loop_{nullptr};
 };
 
 } // namespace caps::platform::macos

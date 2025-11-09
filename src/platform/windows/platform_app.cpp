@@ -24,14 +24,14 @@ PlatformApp::PlatformApp(core::AppContext& context)
 void PlatformApp::Initialize() {
     std::cout << "[Windows::PlatformApp] Initializing platform app" << std::endl;
     keyboard_hook_->Install(context_.Layer());
-    context_.Layer().OnDoubleTapCapsLock(); // simulate overlay for skeleton
+    context_.Layer().SetActionCallback(
+        [this](const std::string& action, bool pressed) { output_->Emit(action, pressed); });
     // TODO: Load configuration, set up message loop, register overlay hotkeys.
 }
 
 void PlatformApp::Run() {
     std::cout << "[Windows::PlatformApp] Running message loop stub" << std::endl;
     keyboard_hook_->StartListening();
-    output_->Emit("simulate-arrow-left");
     // TODO: Pump Windows messages until shutdown is requested.
 }
 

@@ -1,10 +1,10 @@
 #pragma once
 
+#include <functional>
 #include <string>
 
 namespace caps::core {
 
-class ConfigLoader;
 class MappingEngine;
 class OverlayModel;
 
@@ -15,19 +15,23 @@ struct KeyEvent {
 
 class LayerController {
 public:
-    LayerController(ConfigLoader& config, MappingEngine& mapping, OverlayModel& overlay);
+    using ActionCallback = std::function<void(const std::string& action, bool pressed)>;
+
+    LayerController(MappingEngine& mapping, OverlayModel& overlay);
+
+    void SetActionCallback(ActionCallback callback);
 
     void OnCapsLockPressed();
     void OnCapsLockReleased();
-    void OnKeyEvent(const KeyEvent& event);
+    bool OnKeyEvent(const KeyEvent& event);
     void OnDoubleTapCapsLock();
 
     [[nodiscard]] bool IsLayerActive() const;
 
 private:
-    ConfigLoader& config_;
     MappingEngine& mapping_;
     OverlayModel& overlay_;
+    ActionCallback action_callback_;
     bool layer_active_{false};
 };
 

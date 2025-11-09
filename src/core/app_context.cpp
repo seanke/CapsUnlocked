@@ -13,7 +13,8 @@
 namespace caps::core {
 
 AppContext::AppContext()
-    : layer_controller_(config_loader_, mapping_engine_, overlay_model_) {
+    : mapping_engine_(config_loader_),
+      layer_controller_(mapping_engine_, overlay_model_) {
     std::cout << "[AppContext] Context constructed" << std::endl;
 }
 

@@ -34,7 +34,12 @@ elseif(APPLE)
     )
     add_library(caps_platform STATIC ${CAPS_PLATFORM_SOURCES})
     target_include_directories(caps_platform PUBLIC src)
-    target_link_libraries(caps_platform PUBLIC caps_core)
+    target_link_libraries(caps_platform PUBLIC
+        caps_core
+        "-framework ApplicationServices"
+        "-framework CoreFoundation"
+        "-framework IOKit"
+    )
 
     add_executable(CapsUnlocked src/macos_main.cpp)
     target_link_libraries(CapsUnlocked PRIVATE caps_core caps_platform)
@@ -58,6 +63,8 @@ if (BUILD_TESTING)
 
     add_executable(caps_core_tests
         tests/core/config_loader_test.cpp
+        tests/core/mapping_engine_test.cpp
+        tests/core/layer_controller_test.cpp
         tests/core/hello_test.cpp
     )
     target_link_libraries(caps_core_tests PRIVATE caps_core GTest::gtest_main)

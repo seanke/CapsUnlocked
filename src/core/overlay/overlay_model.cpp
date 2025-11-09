@@ -1,33 +1,30 @@
 #include "overlay_model.h"
 
-// CapsUnlocked core: overlay presentation model stub used by platform views to
-// obtain layer mapping summaries.
-
-#include <iostream>
+#include <sstream>
 
 #include "core/mapping/mapping_engine.h"
 
 namespace caps::core {
 
 void OverlayModel::BindMappings(const MappingEngine& engine) {
-    std::cout << "[OverlayModel] Binding mappings: " << engine.ResolveMapping("preview") << std::endl;
-    // TODO: Cache formatted layer entries for overlay display (key + action + hints).
+    entries_ = engine.EnumerateMappings();
 }
 
 void OverlayModel::Show() {
-    std::cout << "[OverlayModel] Showing overlay" << std::endl;
-    // TODO: Track visible state and notify platform views to render overlay contents.
+    visible_ = true;
 }
 
 void OverlayModel::Hide() {
-    std::cout << "[OverlayModel] Hiding overlay" << std::endl;
-    // TODO: Clear visible state and notify platform views to dismiss overlay.
+    visible_ = false;
 }
 
 std::string OverlayModel::Describe() const {
-    std::cout << "[OverlayModel] Describing overlay contents" << std::endl;
-    // TODO: Provide summary text (e.g., for logging or accessibility) of mappings shown.
-    return "overlay:stub";
+    std::ostringstream output;
+    output << (visible_ ? "overlay:visible" : "overlay:hidden");
+    for (const auto& [source, target] : entries_) {
+        output << "\n" << source << " -> " << target;
+    }
+    return output.str();
 }
 
 } // namespace caps::core
