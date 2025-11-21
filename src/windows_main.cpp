@@ -1,16 +1,16 @@
 #ifdef _WIN32
 
-#include <iostream>
 #include <string>
 
 // CapsUnlocked Windows executable entry point: bridges the core context with the
 // Windows platform adapter, using wmain for wide-char argument handling.
 
 #include "core/app_context.h"
+#include "core/logging.h"
 #include "platform/windows/platform_app.h"
 
 int wmain(int argc, wchar_t* argv[]) {
-    std::wcout << L"[Windows::Main] Bootstrapping CapsUnlocked skeleton" << std::endl;
+    caps::core::logging::Info("[Windows::Main] Bootstrapping CapsUnlocked skeleton");
 
     std::string config_path = "capsunlocked.ini";
     if (argc > 1 && argv[1]) {
@@ -28,7 +28,7 @@ int wmain(int argc, wchar_t* argv[]) {
     platform_app.Run();
     platform_app.Shutdown();
 
-    std::wcout << L"[Windows::Main] Exiting skeleton" << std::endl;
+    caps::core::logging::Info("[Windows::Main] Exiting skeleton");
     return 0;
 }
 

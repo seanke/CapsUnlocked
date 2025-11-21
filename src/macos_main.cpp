@@ -1,14 +1,13 @@
-#include <iostream>
-
 // CapsUnlocked macOS executable entry point: wires the core app context to the
 // macOS platform adapter and drives the skeleton lifecycle.
 #include <string>
 
 #include "core/app_context.h"
+#include "core/logging.h"
 #include "platform/macos/platform_app.h"
 
 int main(int argc, char* argv[]) {
-    std::cout << "[macOS::Main] Bootstrapping CapsUnlocked skeleton" << std::endl;
+    caps::core::logging::Info("[macOS::Main] Bootstrapping CapsUnlocked skeleton");
 
     // Default to the adjacent config, mirroring how the Windows build behaves.
     std::string config_path = "capsunlocked.ini";
@@ -28,6 +27,6 @@ int main(int argc, char* argv[]) {
     platform_app.Run();       // Blocks inside CFRunLoopRun() until Shutdown() is called.
     platform_app.Shutdown();  // Ensures hooks/overlay are torn down before exit.
 
-    std::cout << "[macOS::Main] Exiting skeleton" << std::endl;
+    caps::core::logging::Info("[macOS::Main] Exiting skeleton");
     return 0;
 }

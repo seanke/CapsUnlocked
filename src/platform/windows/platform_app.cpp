@@ -3,11 +3,11 @@
 // CapsUnlocked Windows entry adapter: coordinates hook setup, overlay view, and
 // run-loop scaffolding for the Windows-specific executable.
 
-#include <iostream>
 #include <memory>
 
 #include "core/app_context.h"
 #include "core/layer/layer_controller.h"
+#include "core/logging.h"
 #include "core/overlay/overlay_model.h"
 #include "platform/windows/keyboard_hook.h"
 #include "platform/windows/output.h"
@@ -23,7 +23,7 @@ PlatformApp::PlatformApp(core::AppContext& context)
 
 // Establishes hooks and wiring so mapped actions get emitted via Output.
 void PlatformApp::Initialize() {
-    std::cout << "[Windows::PlatformApp] Initializing platform app" << std::endl;
+    core::logging::Info("[Windows::PlatformApp] Initializing platform app");
     keyboard_hook_->Install(context_.Layer());
     context_.Layer().SetActionCallback(
         [this](const std::string& action, bool pressed) { output_->Emit(action, pressed); });
@@ -32,14 +32,14 @@ void PlatformApp::Initialize() {
 
 // Placeholder run-loop stub; real implementation will pump Win32 messages.
 void PlatformApp::Run() {
-    std::cout << "[Windows::PlatformApp] Running message loop stub" << std::endl;
+    core::logging::Info("[Windows::PlatformApp] Running message loop stub");
     keyboard_hook_->StartListening();
     // TODO: Pump Windows messages until shutdown is requested.
 }
 
 // Cleans up hook state so Windows releases our low-level listeners cleanly.
 void PlatformApp::Shutdown() {
-    std::cout << "[Windows::PlatformApp] Shutting down platform app" << std::endl;
+    core::logging::Info("[Windows::PlatformApp] Shutting down platform app");
     keyboard_hook_->StopListening();
     overlay_view_->Hide();
     // TODO: Release Win32 resources, unhook keyboard, and flush overlay state.

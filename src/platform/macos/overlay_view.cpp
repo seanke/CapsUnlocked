@@ -3,23 +3,22 @@
 // CapsUnlocked macOS adapter: placeholder overlay presenter that will ultimately
 // render a transparent panel with mapping details.
 
-#include <iostream>
-
 #include "core/overlay/overlay_model.h"
+#include "core/logging.h"
 
 namespace caps::platform::macos {
 
 OverlayView::OverlayView(core::OverlayModel& model) : model_(model) {
-    std::cout << "[macOS::OverlayView] Constructed overlay view" << std::endl;
+    core::logging::Info("[macOS::OverlayView] Constructed overlay view");
 }
 
 void OverlayView::Show() {
-    std::cout << "[macOS::OverlayView] Show overlay -> " << model_.Describe() << std::endl;
+    core::logging::Info("[macOS::OverlayView] Show overlay -> " + model_.Describe());
     // TODO: Present semi-transparent overlay window/panel with mapping rows.
 }
 
 void OverlayView::Hide() {
-    std::cout << "[macOS::OverlayView] Hide overlay" << std::endl;
+    core::logging::Info("[macOS::OverlayView] Hide overlay");
     // TODO: Dismiss overlay window and clean up view/controller objects.
 }
 

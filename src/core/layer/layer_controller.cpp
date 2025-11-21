@@ -1,9 +1,11 @@
 #include "layer_controller.h"
 
 #include <utility>
+#include <sstream>
 
 #include "core/mapping/mapping_engine.h"
 #include "core/overlay/overlay_model.h"
+#include "core/logging.h"
 
 namespace caps::core {
 
@@ -35,6 +37,18 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
     }
 
     const auto mapping = mapping_.ResolveMapping(event.key);
+    if (event.pressed) {
+        if (mapping) {
+            std::ostringstream msg;
+            msg << "Caps-held key " << event.key << " mapped to " << *mapping;
+            logging::Debug(msg.str());
+        } else {
+            std::ostringstream msg;
+            msg << "Caps-held key " << event.key << " has no mapping";
+            logging::Debug(msg.str());
+        }
+    }
+
     if (!mapping) {
         return true; // swallow unmapped keys while the layer is active
     }

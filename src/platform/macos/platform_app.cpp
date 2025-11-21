@@ -3,12 +3,12 @@
 // CapsUnlocked macOS entry adapter: manages hook installation, overlay view, and
 // run-loop scaffolding for the macOS-specific executable.
 
-#include <iostream>
 #include <memory>
 #include <stdexcept>
 
 #include "core/app_context.h"
 #include "core/layer/layer_controller.h"
+#include "core/logging.h"
 #include "core/overlay/overlay_model.h"
 #include "platform/macos/keyboard_hook.h"
 #include "platform/macos/output.h"
@@ -24,7 +24,7 @@ PlatformApp::PlatformApp(core::AppContext& context)
 
 // Installs hooks and wires callbacks. Throws if the user has not granted permissions.
 void PlatformApp::Initialize() {
-    std::cout << "[macOS::PlatformApp] Initializing platform app" << std::endl;
+    core::logging::Info("[macOS::PlatformApp] Initializing platform app");
     if (!keyboard_hook_->Install(context_.Layer())) {
         throw std::runtime_error(
             "CapsUnlocked needs Accessibility/Input Monitoring permission. Enable it in "
@@ -37,7 +37,7 @@ void PlatformApp::Initialize() {
 
 // Starts listening for events and blocks inside CFRunLoopRun() until Shutdown() is called.
 void PlatformApp::Run() {
-    std::cout << "[macOS::PlatformApp] Entering run loop" << std::endl;
+    core::logging::Info("[macOS::PlatformApp] Entering run loop");
     run_loop_ = CFRunLoopGetCurrent();
     // After the hook is armed we block in CFRunLoopRun() until Shutdown() stops it.
     keyboard_hook_->StartListening();
@@ -46,7 +46,7 @@ void PlatformApp::Run() {
 
 // Stops the run loop, tears down hooks, and hides any overlay that might be showing.
 void PlatformApp::Shutdown() {
-    std::cout << "[macOS::PlatformApp] Shutting down platform app" << std::endl;
+    core::logging::Info("[macOS::PlatformApp] Shutting down platform app");
     if (run_loop_) {
         CFRunLoopStop(run_loop_);
         run_loop_ = nullptr;

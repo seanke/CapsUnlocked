@@ -4,12 +4,12 @@
 #include <Carbon/Carbon.h>
 
 #include <cctype>
-#include <iostream>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
 
+#include "core/logging.h"
 #include "platform/macos/event_tag.h"
 
 namespace caps::platform::macos {
@@ -97,13 +97,13 @@ std::optional<CGKeyCode> LookupKeyCode(const std::string& action) {
 void Output::Emit(const std::string& action, bool pressed) {
     const auto key_code = LookupKeyCode(action);
     if (!key_code) {
-        std::cerr << "[macOS::Output] Unknown action '" << action << "'" << std::endl;
+        core::logging::Warn("[macOS::Output] Unknown action '" + action + "'");
         return;
     }
 
     CGEventRef event = CGEventCreateKeyboardEvent(nullptr, *key_code, pressed);
     if (!event) {
-        std::cerr << "[macOS::Output] Failed to create CGEvent for " << action << std::endl;
+        core::logging::Error("[macOS::Output] Failed to create CGEvent for " + action);
         return;
     }
 

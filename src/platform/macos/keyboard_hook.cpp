@@ -7,11 +7,11 @@
 
 #include <cctype>
 #include <iomanip>
-#include <iostream>
 #include <iterator>
 #include <sstream>
 
 #include "core/layer/layer_controller.h"
+#include "core/logging.h"
 #include "platform/macos/event_tag.h"
 
 namespace caps::platform::macos {
@@ -25,16 +25,14 @@ bool KeyboardHook::Install(core::LayerController& controller) {
     controller_ = &controller;
 
     if (!EnsureAccessibilityPrivileges()) {
-        std::cerr << "[macOS::KeyboardHook] Accessibility permission is required. "
-                     "Enable CapsUnlocked under System Settings → Privacy & Security → Accessibility."
-                  << std::endl;
+        core::logging::Error("[macOS::KeyboardHook] Accessibility permission is required. "
+                             "Enable CapsUnlocked under System Settings → Privacy & Security → Accessibility.");
         return false;
     }
 
     if (!EnsureInputMonitoringPrivileges()) {
-        std::cerr << "[macOS::KeyboardHook] Input Monitoring permission is required. "
-                     "Enable CapsUnlocked under System Settings → Privacy & Security → Input Monitoring."
-                  << std::endl;
+        core::logging::Error("[macOS::KeyboardHook] Input Monitoring permission is required. "
+                             "Enable CapsUnlocked under System Settings → Privacy & Security → Input Monitoring.");
         return false;
     }
 
@@ -49,9 +47,8 @@ bool KeyboardHook::Install(core::LayerController& controller) {
                                   &KeyboardHook::EventCallback,
                                   this);
     if (!event_tap_) {
-        std::cerr << "[macOS::KeyboardHook] Failed to create HID-level event tap; "
-                     "falling back to session tap (may not block elevated apps)."
-                  << std::endl;
+        core::logging::Warn("[macOS::KeyboardHook] Failed to create HID-level event tap; "
+                            "falling back to session tap (may not block elevated apps).");
         // kCGSessionEventTap works without Input Monitoring but cannot intercept events targeted
         // at higher-privilege apps. Still better than failing outright.
         event_tap_ = CGEventTapCreate(kCGSessionEventTap,
@@ -63,24 +60,22 @@ bool KeyboardHook::Install(core::LayerController& controller) {
     }
 
     if (!event_tap_) {
-        std::cerr << "[macOS::KeyboardHook] Could not create any event tap. "
-                     "Check Accessibility/Input Monitoring permissions."
-                  << std::endl;
+        core::logging::Error("[macOS::KeyboardHook] Could not create any event tap. "
+                             "Check Accessibility/Input Monitoring permissions.");
         return false;
     }
 
     run_loop_source_ = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, event_tap_, 0);
     if (!run_loop_source_) {
-        std::cerr << "[macOS::KeyboardHook] Failed to create run-loop source for event tap" << std::endl;
+        core::logging::Error("[macOS::KeyboardHook] Failed to create run-loop source for event tap");
         CFRelease(event_tap_);
         event_tap_ = nullptr;
         return false;
     }
 
     if (!InitializeHIDMonitor()) {
-        std::cerr << "[macOS::KeyboardHook] Warning: IOHID manager unavailable; "
-                     "CapsLock detection may fail if the key is remapped to No Action."
-                  << std::endl;
+        core::logging::Warn("[macOS::KeyboardHook] Warning: IOHID manager unavailable; "
+                            "CapsLock detection may fail if the key is remapped to No Action.");
     }
 
     return true;
@@ -104,9 +99,10 @@ void KeyboardHook::StartListening() {
 
         const IOReturn open_result = IOHIDManagerOpen(hid_manager_, kIOHIDOptionsTypeNone);
         if (open_result != kIOReturnSuccess) {
-            std::cerr << "[macOS::KeyboardHook] Warning: IOHIDManagerOpen failed (0x" << std::hex
-                      << open_result << std::dec << "); CapsLock detection may be inconsistent."
-                      << std::endl;
+            std::ostringstream msg;
+            msg << "[macOS::KeyboardHook] Warning: IOHIDManagerOpen failed (0x" << std::hex << open_result
+                << std::dec << "); CapsLock detection may be inconsistent.";
+            core::logging::Warn(msg.str());
         } else {
             hid_open_ = true;
         }
@@ -248,11 +244,17 @@ std::string KeyboardHook::ExtractKeyToken(CGEventRef event) {
 
 void KeyboardHook::UpdateCapsLockState(bool pressed) {
     if (pressed == capslock_down_) {
+        if (pressed) {
+            core::logging::Debug("[macOS::KeyboardHook] CapsLock held");
+        }
         return;
     }
 
     // Transition edge detected; forward state change into the shared controller.
     capslock_down_ = pressed;
+    std::ostringstream msg;
+    msg << "[macOS::KeyboardHook] CapsLock " << (pressed ? "pressed" : "released");
+    core::logging::Debug(msg.str());
     if (!controller_) {
         return;
     }
