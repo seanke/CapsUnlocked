@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <string_view>
+#include <optional>
 
 namespace caps::core::logging {
 
@@ -16,6 +17,8 @@ enum class Level {
 Level GetLevel();
 // Sets the global log level threshold.
 void SetLevel(Level level);
+// Parses a string name into a Level (case-insensitive). Returns std::nullopt on failure.
+std::optional<Level> ParseLevel(std::string_view name);
 
 // Emits a log message at the given level if it meets the current threshold.
 void Log(Level level, std::string_view message);
@@ -27,4 +30,3 @@ inline void Warn(std::string_view message) { Log(Level::Warning, message); }
 inline void Error(std::string_view message) { Log(Level::Error, message); }
 
 } // namespace caps::core::logging
-

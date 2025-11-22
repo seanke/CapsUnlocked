@@ -6,6 +6,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <algorithm>
 
 namespace caps::core::logging {
 
@@ -62,6 +63,24 @@ Level GetLevel() {
 
 void SetLevel(Level level) {
     g_level.store(level, std::memory_order_relaxed);
+}
+
+std::optional<Level> ParseLevel(std::string_view name) {
+    std::string lower{name};
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lower == "debug") {
+        return Level::Debug;
+    }
+    if (lower == "info") {
+        return Level::Info;
+    }
+    if (lower == "warn" || lower == "warning") {
+        return Level::Warning;
+    }
+    if (lower == "error") {
+        return Level::Error;
+    }
+    return std::nullopt;
 }
 
 void Log(Level level, std::string_view message) {

@@ -1,6 +1,7 @@
 // CapsUnlocked macOS executable entry point: wires the core app context to the
 // macOS platform adapter and drives the skeleton lifecycle.
 #include <string>
+#include <string_view>
 
 #include "core/app_context.h"
 #include "core/logging.h"
@@ -11,9 +12,22 @@ int main(int argc, char* argv[]) {
 
     // Default to the adjacent config, mirroring how the Windows build behaves.
     std::string config_path = "capsunlocked.ini";
-    if (argc > 1) {
-        // Allow overriding the config path via CLI for demos/tests.
-        config_path = argv[1];
+    for (int i = 1; i < argc; ++i) {
+        std::string_view arg = argv[i];
+        if (arg.rfind("--log-level=", 0) == 0) {
+            const auto level_name = arg.substr(std::string_view("--log-level=").size());
+            if (const auto parsed = caps::core::logging::ParseLevel(level_name)) {
+                caps::core::logging::SetLevel(*parsed);
+                caps::core::logging::Info("[macOS::Main] Log level set to " + std::string(level_name));
+            } else {
+                caps::core::logging::Warn("[macOS::Main] Unknown log level '" + std::string(level_name) +
+                                          "' (valid: debug, info, warn, error)");
+            }
+            continue;
+        }
+
+        // First non-flag argument is treated as config path override.
+        config_path = arg;
     }
     // TODO: Surface CLI options (e.g., config override, diagnostics) and handle errors.
 
