@@ -36,7 +36,7 @@ protected:
 } // namespace
 
 TEST_F(MappingEngineTest, ResolvesAndReloadsMappings) {
-    const fs::path config_path = WriteConfig("h Left\nj Down\n");
+    const fs::path config_path = WriteConfig("* h Left\n* j Down\n");
 
     caps::core::ConfigLoader loader;
     loader.Load(config_path.string());
@@ -44,26 +44,30 @@ TEST_F(MappingEngineTest, ResolvesAndReloadsMappings) {
     caps::core::MappingEngine engine(loader);
     engine.Initialize();
 
-    auto left = engine.ResolveMapping("h");
+    auto left = engine.ResolveMapping("h", "");
     ASSERT_TRUE(left.has_value());
-    EXPECT_EQ("LEFT", *left);
+    EXPECT_EQ("LEFT", left->action);
+    EXPECT_EQ("*", left->app);
 
-    auto down = engine.ResolveMapping("J");
+    auto down = engine.ResolveMapping("J", "");
     ASSERT_TRUE(down.has_value());
-    EXPECT_EQ("DOWN", *down);
+    EXPECT_EQ("DOWN", down->action);
+    EXPECT_EQ("*", down->app);
 
     // Update the config on disk and ensure the engine refreshes its cache.
-    WriteConfig("l Right\n");
+    WriteConfig("* l Right\n");
     loader.Reload();
     engine.UpdateFromConfig();
 
-    EXPECT_FALSE(engine.ResolveMapping("H").has_value());
-    auto right = engine.ResolveMapping("l");
+    EXPECT_FALSE(engine.ResolveMapping("H", "").has_value());
+    auto right = engine.ResolveMapping("l", "");
     ASSERT_TRUE(right.has_value());
-    EXPECT_EQ("RIGHT", *right);
+    EXPECT_EQ("RIGHT", right->action);
+    EXPECT_EQ("*", right->app);
 
     const auto entries = engine.EnumerateMappings();
     ASSERT_EQ(1u, entries.size());
-    EXPECT_EQ("L", entries.front().first);
-    EXPECT_EQ("RIGHT", entries.front().second);
+    EXPECT_EQ("*", entries.front().app);
+    EXPECT_EQ("L", entries.front().source);
+    EXPECT_EQ("RIGHT", entries.front().target);
 }

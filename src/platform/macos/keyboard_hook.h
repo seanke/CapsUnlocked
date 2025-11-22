@@ -35,6 +35,7 @@ private:
     bool HandleCapsLock(CGEventRef event);
     bool HandleKey(CGEventRef event, bool pressed);
     static std::string ExtractKeyToken(CGEventRef event);
+    static std::string ResolveAppForEvent(CGEventRef event);
     bool EnsureAccessibilityPrivileges() const;
     bool EnsureInputMonitoringPrivileges() const;
     // Normalizes CapsLock transitions to a single place so both CGEvent and IOHID paths reuse it.

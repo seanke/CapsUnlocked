@@ -22,15 +22,28 @@ public:
     // Rebuilds the lookup table after ConfigLoader reloads.
     void UpdateFromConfig();
 
-    [[nodiscard]] std::optional<std::string> ResolveMapping(const std::string& key) const;
-    [[nodiscard]] std::vector<std::pair<std::string, std::string>> EnumerateMappings() const;
+    struct ResolvedMapping {
+        std::string action;
+        std::string app; // normalized app token that provided this mapping ("*" for fallback).
+    };
+
+    [[nodiscard]] std::optional<ResolvedMapping> ResolveMapping(const std::string& key,
+                                                                const std::string& app) const;
+    struct MappingEntry {
+        std::string app;
+        std::string source;
+        std::string target;
+    };
+    [[nodiscard]] std::vector<MappingEntry> EnumerateMappings() const;
+    static std::string NormalizeAppToken(const std::string& app);
 
 private:
     void RebuildTable();
     static std::string NormalizeToken(const std::string& key);
 
     const ConfigLoader& config_;
-    std::unordered_map<std::string, std::string> resolved_;
+    // app -> key -> target
+    std::unordered_map<std::string, std::unordered_map<std::string, std::string>> resolved_;
 };
 
 } // namespace caps::core

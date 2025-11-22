@@ -9,6 +9,10 @@
 #include <iomanip>
 #include <iterator>
 #include <sstream>
+#include <string>
+#include <libproc.h>
+#include <unistd.h>
+#include <ApplicationServices/ApplicationServices.h>
 
 #include "core/layer/layer_controller.h"
 #include "core/logging.h"
@@ -213,7 +217,7 @@ bool KeyboardHook::HandleKey(CGEventRef event, bool pressed) {
     }
 
     // Forward into the shared controller so it can decide whether to emit a mapping.
-    core::KeyEvent key_event{token, pressed};
+    core::KeyEvent key_event{token, ResolveAppForEvent(event), pressed};
     return controller_->OnKeyEvent(key_event);
 }
 
@@ -240,6 +244,33 @@ std::string KeyboardHook::ExtractKeyToken(CGEventRef event) {
     // For non-printable keys, expose the raw keycode so configs can reference it via hex.
     token << "0X" << std::uppercase << std::hex << keycode;
     return token.str();
+}
+
+// Derives a normalized application identifier from the CGEvent's source process.
+std::string KeyboardHook::ResolveAppForEvent(CGEventRef event) {
+    auto frontmost_pid = []() -> pid_t {
+        ProcessSerialNumber psn;
+        if (GetFrontProcess(&psn) != noErr) {
+            return -1;
+        }
+        pid_t pid = -1;
+        if (GetProcessPID(&psn, &pid) != noErr) {
+            return -1;
+        }
+        return pid;
+    };
+
+    pid_t pid = frontmost_pid();
+    if (pid <= 0 && event) {
+        pid = static_cast<pid_t>(CGEventGetIntegerValueField(event, kCGEventSourceUnixProcessID));
+    }
+
+    char name[PROC_PIDPATHINFO_MAXSIZE] = {};
+    const int length = proc_name(pid, name, sizeof(name));
+    if (length <= 0) {
+        return "";
+    }
+    return std::string(name, static_cast<size_t>(length));
 }
 
 void KeyboardHook::UpdateCapsLockState(bool pressed) {

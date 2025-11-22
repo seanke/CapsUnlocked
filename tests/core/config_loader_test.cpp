@@ -37,21 +37,21 @@ protected:
 
 TEST_F(ConfigLoaderTest, ParsesValidConfigWithNormalization) {
     const fs::path path = WriteConfig("capsunlocked.ini", R"(# comment
-      h   Left
-      j   Down
-      k   up
-      custom   0x1a
+      *   h   Left
+      *   j   Down
+      chrome   k   up
+      chrome   custom   0x1a
 )");
 
     caps::core::ConfigLoader loader;
     loader.Load(path.string());
 
     const auto& mappings = loader.Mappings();
-    ASSERT_EQ(4u, mappings.size());
-    EXPECT_EQ("LEFT", mappings.at("H"));
-    EXPECT_EQ("DOWN", mappings.at("J"));
-    EXPECT_EQ("UP", mappings.at("K"));
-    EXPECT_EQ("0X1A", mappings.at("CUSTOM"));
+    ASSERT_EQ(2u, mappings.size());
+    EXPECT_EQ("LEFT", mappings.at("*").at("H"));
+    EXPECT_EQ("DOWN", mappings.at("*").at("J"));
+    EXPECT_EQ("UP", mappings.at("CHROME").at("K"));
+    EXPECT_EQ("0X1A", mappings.at("CHROME").at("CUSTOM"));
 
     const std::string description = loader.Describe();
     EXPECT_NE(std::string::npos, description.find("H -> LEFT"));
@@ -59,16 +59,16 @@ TEST_F(ConfigLoaderTest, ParsesValidConfigWithNormalization) {
 }
 
 TEST_F(ConfigLoaderTest, ReloadRefreshesMappingsFromDisk) {
-    const fs::path path = WriteConfig("capsunlocked.ini", "h Left\n");
+    const fs::path path = WriteConfig("capsunlocked.ini", "* h Left\n");
 
     caps::core::ConfigLoader loader;
     loader.Load(path.string());
-    ASSERT_EQ("LEFT", loader.Mappings().at("H"));
+    ASSERT_EQ("LEFT", loader.Mappings().at("*").at("H"));
 
-    WriteConfig("capsunlocked.ini", "h Home\n");
+    WriteConfig("capsunlocked.ini", "* h Home\n");
 
     loader.Reload();
-    EXPECT_EQ("HOME", loader.Mappings().at("H"));
+    EXPECT_EQ("HOME", loader.Mappings().at("*").at("H"));
 }
 
 TEST_F(ConfigLoaderTest, MissingFileUsesDefaultMappings) {
@@ -78,11 +78,11 @@ TEST_F(ConfigLoaderTest, MissingFileUsesDefaultMappings) {
     loader.Load(missing.string());
 
     const auto& mappings = loader.Mappings();
-    ASSERT_EQ(4u, mappings.size());
-    EXPECT_EQ("LEFT", mappings.at("H"));
-    EXPECT_EQ("DOWN", mappings.at("J"));
-    EXPECT_EQ("UP", mappings.at("K"));
-    EXPECT_EQ("RIGHT", mappings.at("L"));
+    ASSERT_EQ(4u, mappings.at("*").size());
+    EXPECT_EQ("LEFT", mappings.at("*").at("H"));
+    EXPECT_EQ("DOWN", mappings.at("*").at("J"));
+    EXPECT_EQ("UP", mappings.at("*").at("K"));
+    EXPECT_EQ("RIGHT", mappings.at("*").at("L"));
 }
 
 TEST_F(ConfigLoaderTest, MalformedConfigThrows) {

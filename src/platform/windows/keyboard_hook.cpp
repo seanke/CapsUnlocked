@@ -19,7 +19,7 @@ void KeyboardHook::StartListening() {
     if (controller_) {
         // Simulate a quick Caps layer cycle so the scaffold exercises mapping callbacks.
         controller_->OnCapsLockPressed();
-        controller_->OnKeyEvent({"H", true});
+        controller_->OnKeyEvent({"H", "", true});
         controller_->OnCapsLockReleased();
     }
     // TODO: Enter message loop and translate Win32 events into controller calls.

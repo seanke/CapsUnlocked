@@ -11,6 +11,7 @@ class OverlayModel;
 // Lightweight struct that represents a key + press/release state as captured by hooks.
 struct KeyEvent {
     std::string key;
+    std::string app; // Normalized application identifier (empty uses fallback mappings).
     bool pressed{false};
 };
 

@@ -39,7 +39,7 @@ protected:
 } // namespace
 
 TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
-    const fs::path config_path = WriteConfig("h Left\n");
+    const fs::path config_path = WriteConfig("* h Left\n");
 
     caps::core::ConfigLoader loader;
     loader.Load(config_path.string());
@@ -57,13 +57,13 @@ TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
         [&emitted](const std::string& action, bool pressed) { emitted.emplace_back(action, pressed); });
 
     // Layer inactive: events pass through untouched.
-    EXPECT_FALSE(controller.OnKeyEvent({"H", true}));
+    EXPECT_FALSE(controller.OnKeyEvent({"H", "", true}));
 
     controller.OnCapsLockPressed();
     ASSERT_TRUE(controller.IsLayerActive());
 
-    EXPECT_TRUE(controller.OnKeyEvent({"H", true}));
-    EXPECT_TRUE(controller.OnKeyEvent({"H", false}));
+    EXPECT_TRUE(controller.OnKeyEvent({"H", "", true}));
+    EXPECT_TRUE(controller.OnKeyEvent({"H", "", false}));
 
     ASSERT_EQ(2u, emitted.size());
     EXPECT_EQ("LEFT", emitted[0].first);
@@ -71,10 +71,10 @@ TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
     EXPECT_FALSE(emitted[1].second);
 
     // Unmapped keys are still swallowed while the layer is active.
-    EXPECT_TRUE(controller.OnKeyEvent({"Z", true}));
+    EXPECT_TRUE(controller.OnKeyEvent({"Z", "", true}));
     EXPECT_EQ(2u, emitted.size());
 
     controller.OnCapsLockReleased();
     EXPECT_FALSE(controller.IsLayerActive());
-    EXPECT_FALSE(controller.OnKeyEvent({"H", true}));
+    EXPECT_FALSE(controller.OnKeyEvent({"H", "", true}));
 }

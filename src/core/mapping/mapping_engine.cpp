@@ -17,39 +17,62 @@ void MappingEngine::UpdateFromConfig() {
     RebuildTable();
 }
 
-// Returns the mapped action if the layer defines one. Otherwise std::nullopt.
-std::optional<std::string> MappingEngine::ResolveMapping(const std::string& key) const {
+// Returns the mapped action if the layer defines one for the given app (with fallback). Otherwise std::nullopt.
+std::optional<MappingEngine::ResolvedMapping> MappingEngine::ResolveMapping(const std::string& key,
+                                                                            const std::string& app) const {
     if (key.empty()) {
         return std::nullopt;
     }
 
     const std::string normalized = NormalizeToken(key);
-    const auto it = resolved_.find(normalized);
-    if (it == resolved_.end()) {
-        return std::nullopt;
+    const std::string normalized_app = NormalizeAppToken(app);
+
+    // Prefer an app-specific mapping when available, otherwise fall back to "*".
+    const auto by_app = resolved_.find(normalized_app);
+    if (by_app != resolved_.end()) {
+        const auto it = by_app->second.find(normalized);
+        if (it != by_app->second.end()) {
+            return ResolvedMapping{it->second, normalized_app};
+        }
     }
-    return it->second;
+
+    const auto fallback = resolved_.find("*");
+    if (fallback != resolved_.end()) {
+        const auto it = fallback->second.find(normalized);
+        if (it != fallback->second.end()) {
+            return ResolvedMapping{it->second, "*"};
+        }
+    }
+
+    return std::nullopt;
 }
 
 // Exposes ordered rows for overlays, logging, or debugging tooling.
-std::vector<std::pair<std::string, std::string>> MappingEngine::EnumerateMappings() const {
-    std::vector<std::pair<std::string, std::string>> ordered;
-    ordered.reserve(resolved_.size());
-    for (const auto& [source, target] : resolved_) {
-        // Keep the original key token alongside its resolved action for UI/diagnostics.
-        ordered.emplace_back(source, target);
+std::vector<MappingEngine::MappingEntry> MappingEngine::EnumerateMappings() const {
+    std::vector<MappingEntry> ordered;
+    for (const auto& [app, table] : resolved_) {
+        for (const auto& [source, target] : table) {
+            ordered.push_back(MappingEntry{app, source, target});
+        }
     }
     std::sort(ordered.begin(), ordered.end(),
-              [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+              [](const auto& lhs, const auto& rhs) {
+                  if (lhs.app == rhs.app) {
+                      return lhs.source < rhs.source;
+                  }
+                  return lhs.app < rhs.app;
+              });
     return ordered;
 }
 
 // Normalizes every key in the config into a hash table for O(1) lookups.
 void MappingEngine::RebuildTable() {
     resolved_.clear();
-    for (const auto& [source, target] : config_.Mappings()) {
-        // Each config entry collapses to a single uppercase token to avoid duplicate keys from case differences.
-        resolved_[NormalizeToken(source)] = target;
+    for (const auto& [app, table] : config_.Mappings()) {
+        for (const auto& [source, target] : table) {
+            // Each config entry collapses to a single uppercase token to avoid duplicate keys from case differences.
+            resolved_[NormalizeAppToken(app)][NormalizeToken(source)] = target;
+        }
     }
 }
 
@@ -63,6 +86,25 @@ std::string MappingEngine::NormalizeToken(const std::string& key) {
             continue;
         }
         normalized.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+    }
+    return normalized;
+}
+
+std::string MappingEngine::NormalizeAppToken(const std::string& app) {
+    if (app.empty()) {
+        return "*";
+    }
+
+    std::string normalized;
+    normalized.reserve(app.size());
+    for (char ch : app) {
+        if (std::isspace(static_cast<unsigned char>(ch))) {
+            continue;
+        }
+        normalized.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+    }
+    if (normalized.empty()) {
+        return "*";
     }
     return normalized;
 }

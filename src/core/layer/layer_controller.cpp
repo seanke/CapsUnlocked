@@ -36,15 +36,24 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
         return false;
     }
 
-    const auto mapping = mapping_.ResolveMapping(event.key);
+    const std::string normalized_app = MappingEngine::NormalizeAppToken(event.app);
+    const auto mapping = mapping_.ResolveMapping(event.key, event.app);
     if (event.pressed) {
         if (mapping) {
             std::ostringstream msg;
-            msg << "Caps-held key " << event.key << " mapped to " << *mapping;
+            const std::string resolved_app = mapping->app;
+            const std::string raw_app = event.app.empty() ? "*" : event.app;
+            msg << "Caps-held key " << event.key << " mapped to " << mapping->action
+                << " (app=" << raw_app
+                << ", config_app=" << resolved_app
+                << ")";
             logging::Debug(msg.str());
         } else {
             std::ostringstream msg;
-            msg << "Caps-held key " << event.key << " has no mapping";
+            msg << "Caps-held key " << event.key << " has no mapping"
+                << " (app=" << (event.app.empty() ? "*" : event.app)
+                << ", config_app=" << normalized_app
+                << ")";
             logging::Debug(msg.str());
         }
     }
@@ -55,7 +64,7 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
 
     if (action_callback_) {
         // Notify the platform adapter so it can emit synthetic events immediately.
-        action_callback_(*mapping, event.pressed);
+        action_callback_(mapping->action, event.pressed);
     }
     return true;
 }

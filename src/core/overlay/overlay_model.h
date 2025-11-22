@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <utility>
+#include <tuple>
 #include <vector>
 
 namespace caps::core {
@@ -21,7 +21,7 @@ public:
     [[nodiscard]] std::string Describe() const;
 
 private:
-    std::vector<std::pair<std::string, std::string>> entries_;
+    std::vector<std::tuple<std::string, std::string, std::string>> entries_; // app, key, action
     bool visible_{false};
 };
 

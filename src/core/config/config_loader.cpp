@@ -48,9 +48,15 @@ const ConfigLoader::MappingTable& ConfigLoader::Mappings() const {
 // Produces a quick human-readable summary that is handy for logging and debugging.
 std::string ConfigLoader::Describe() const {
     std::ostringstream output;
-    output << "Config (" << mappings_.size() << " entries)";
-    for (const auto& [source, target] : mappings_) {
-        output << "\n" << source << " -> " << target;
+    size_t count = 0;
+    for (const auto& [app, table] : mappings_) {
+        count += table.size();
+    }
+    output << "Config (" << count << " entries)";
+    for (const auto& [app, table] : mappings_) {
+        for (const auto& [source, target] : table) {
+            output << "\n[" << app << "] " << source << " -> " << target;
+        }
     }
     return output.str();
 }
@@ -77,28 +83,21 @@ ConfigLoader::MappingTable ConfigLoader::ParseConfigFile(const std::string& path
                                      ": '=' separators are not supported; use whitespace");
         }
 
-        const auto separator = trimmed.find_first_of(" \t");
-        if (separator == std::string::npos) {
-            throw std::runtime_error("Invalid config line " + std::to_string(line_number) + ": missing whitespace separator");
+        std::istringstream line_stream(trimmed);
+        std::string app_token;
+        std::string key_token;
+        std::string action_token;
+        if (!(line_stream >> app_token >> key_token >> action_token)) {
+            throw std::runtime_error("Invalid config line " + std::to_string(line_number) +
+                                     ": expected 'app key action'");
         }
 
-        const std::string left = trimmed.substr(0, separator);
-        size_t right_begin = separator;
-        // Skip any combination of whitespace after the separator.
-        while (right_begin < trimmed.size() &&
-               (trimmed[right_begin] == ' ' || trimmed[right_begin] == '\t')) {
-            ++right_begin;
-        }
-        if (right_begin >= trimmed.size()) {
-            throw std::runtime_error("Invalid config line " + std::to_string(line_number) + ": missing mapping target");
-        }
-        const std::string right = trimmed.substr(right_begin);
+        // Normalize tokens so lookups are case-insensitive and whitespace-agnostic.
+        const std::string app = NormalizeAppToken(app_token);
+        const std::string source = NormalizeKeyToken(key_token);
+        const std::string target = NormalizeKeyToken(action_token);
 
-        // Normalize both halves so the lookup table stays case-insensitive.
-        const std::string source = NormalizeKeyToken(left);
-        const std::string target = NormalizeKeyToken(right);
-
-        parsed[source] = target;
+        parsed[app][source] = target;
     }
 
     if (parsed.empty()) {
@@ -111,10 +110,7 @@ ConfigLoader::MappingTable ConfigLoader::ParseConfigFile(const std::string& path
 // Default vim-style arrows that keep the product useful when no config exists.
 ConfigLoader::MappingTable ConfigLoader::BuildDefaultMappings() {
     return {
-        {"H", "LEFT"},
-        {"J", "DOWN"},
-        {"K", "UP"},
-        {"L", "RIGHT"},
+        {"*", {{"H", "LEFT"}, {"J", "DOWN"}, {"K", "UP"}, {"L", "RIGHT"}}},
     };
 }
 
@@ -150,6 +146,26 @@ std::string ConfigLoader::NormalizeKeyToken(const std::string& token) {
         throw std::runtime_error("Key token reduced to empty value during normalization");
     }
 
+    return normalized;
+}
+
+std::string ConfigLoader::NormalizeAppToken(const std::string& token) {
+    const std::string trimmed = Trim(token);
+    if (trimmed.empty()) {
+        return "*";
+    }
+
+    std::string normalized;
+    normalized.reserve(trimmed.size());
+    for (char ch : trimmed) {
+        if (std::isspace(static_cast<unsigned char>(ch))) {
+            continue;
+        }
+        normalized.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+    }
+    if (normalized.empty()) {
+        return "*";
+    }
     return normalized;
 }
 

@@ -7,7 +7,10 @@
 namespace caps::core {
 
 void OverlayModel::BindMappings(const MappingEngine& engine) {
-    entries_ = engine.EnumerateMappings();
+    entries_.clear();
+    for (const auto& entry : engine.EnumerateMappings()) {
+        entries_.emplace_back(entry.app, entry.source, entry.target);
+    }
 }
 
 // Called when CapsLock is double-tapped so the UI knows to show the reference sheet.
@@ -24,8 +27,8 @@ void OverlayModel::Hide() {
 std::string OverlayModel::Describe() const {
     std::ostringstream output;
     output << (visible_ ? "overlay:visible" : "overlay:hidden");
-    for (const auto& [source, target] : entries_) {
-        output << "\n" << source << " -> " << target;
+    for (const auto& [app, source, target] : entries_) {
+        output << "\n[" << app << "] " << source << " -> " << target;
     }
     return output.str();
 }
