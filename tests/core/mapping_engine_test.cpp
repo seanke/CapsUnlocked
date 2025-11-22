@@ -36,7 +36,7 @@ protected:
 } // namespace
 
 TEST_F(MappingEngineTest, ResolvesAndReloadsMappings) {
-    const fs::path config_path = WriteConfig("h=Left\nj=Down\n");
+    const fs::path config_path = WriteConfig("h Left\nj Down\n");
 
     caps::core::ConfigLoader loader;
     loader.Load(config_path.string());
@@ -53,7 +53,7 @@ TEST_F(MappingEngineTest, ResolvesAndReloadsMappings) {
     EXPECT_EQ("DOWN", *down);
 
     // Update the config on disk and ensure the engine refreshes its cache.
-    WriteConfig("l=Right\n");
+    WriteConfig("l Right\n");
     loader.Reload();
     engine.UpdateFromConfig();
 

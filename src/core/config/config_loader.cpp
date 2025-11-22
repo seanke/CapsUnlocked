@@ -55,7 +55,7 @@ std::string ConfigLoader::Describe() const {
     return output.str();
 }
 
-// Opens the ini file, parses `key=value` rows, and returns a normalized map.
+// Opens the ini file, parses whitespace-delimited `key value` rows, and returns a normalized map.
 ConfigLoader::MappingTable ConfigLoader::ParseConfigFile(const std::string& path) const {
     std::ifstream stream(path);
     if (!stream.is_open()) {
@@ -72,13 +72,27 @@ ConfigLoader::MappingTable ConfigLoader::ParseConfigFile(const std::string& path
             continue;
         }
 
-        const auto separator = trimmed.find('=');
+        if (trimmed.find('=') != std::string::npos) {
+            throw std::runtime_error("Invalid config line " + std::to_string(line_number) +
+                                     ": '=' separators are not supported; use whitespace");
+        }
+
+        const auto separator = trimmed.find_first_of(" \t");
         if (separator == std::string::npos) {
-            throw std::runtime_error("Invalid config line " + std::to_string(line_number) + ": missing '='");
+            throw std::runtime_error("Invalid config line " + std::to_string(line_number) + ": missing whitespace separator");
         }
 
         const std::string left = trimmed.substr(0, separator);
-        const std::string right = trimmed.substr(separator + 1);
+        size_t right_begin = separator;
+        // Skip any combination of whitespace after the separator.
+        while (right_begin < trimmed.size() &&
+               (trimmed[right_begin] == ' ' || trimmed[right_begin] == '\t')) {
+            ++right_begin;
+        }
+        if (right_begin >= trimmed.size()) {
+            throw std::runtime_error("Invalid config line " + std::to_string(line_number) + ": missing mapping target");
+        }
+        const std::string right = trimmed.substr(right_begin);
 
         // Normalize both halves so the lookup table stays case-insensitive.
         const std::string source = NormalizeKeyToken(left);

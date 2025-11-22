@@ -37,10 +37,10 @@ protected:
 
 TEST_F(ConfigLoaderTest, ParsesValidConfigWithNormalization) {
     const fs::path path = WriteConfig("capsunlocked.ini", R"(# comment
-      h = Left
-      j=Down
-      k = up
-      custom = 0x1a
+      h   Left
+      j   Down
+      k   up
+      custom   0x1a
 )");
 
     caps::core::ConfigLoader loader;
@@ -59,13 +59,13 @@ TEST_F(ConfigLoaderTest, ParsesValidConfigWithNormalization) {
 }
 
 TEST_F(ConfigLoaderTest, ReloadRefreshesMappingsFromDisk) {
-    const fs::path path = WriteConfig("capsunlocked.ini", "h=Left\n");
+    const fs::path path = WriteConfig("capsunlocked.ini", "h Left\n");
 
     caps::core::ConfigLoader loader;
     loader.Load(path.string());
     ASSERT_EQ("LEFT", loader.Mappings().at("H"));
 
-    WriteConfig("capsunlocked.ini", "h=Home\n");
+    WriteConfig("capsunlocked.ini", "h Home\n");
 
     loader.Reload();
     EXPECT_EQ("HOME", loader.Mappings().at("H"));

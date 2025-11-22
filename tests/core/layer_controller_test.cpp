@@ -39,7 +39,7 @@ protected:
 } // namespace
 
 TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
-    const fs::path config_path = WriteConfig("h=Left\n");
+    const fs::path config_path = WriteConfig("h Left\n");
 
     caps::core::ConfigLoader loader;
     loader.Load(config_path.string());
