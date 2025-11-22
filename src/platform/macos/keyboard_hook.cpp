@@ -7,7 +7,6 @@
 
 #include <cctype>
 #include <iomanip>
-#include <iterator>
 #include <sstream>
 #include <string>
 #include <ApplicationServices/ApplicationServices.h>

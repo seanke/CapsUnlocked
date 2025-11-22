@@ -54,7 +54,6 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
         return false;
     }
 
-    const std::string normalized_app = MappingEngine::NormalizeAppToken(event.app);
     const auto mapping = mapping_.ResolveMapping(event.key, event.app);
     if (event.pressed) {
         if (mapping) {
