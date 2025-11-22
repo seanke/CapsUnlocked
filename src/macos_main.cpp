@@ -31,15 +31,15 @@ int main(int argc, char* argv[]) {
     }
     // TODO: Surface CLI options (e.g., config override, diagnostics) and handle errors.
 
-    // The AppContext owns all core subsystems (config, mapping, overlay, controller).
+    // The AppContext owns all core subsystems (config, mapping, controller).
     caps::core::AppContext context;
     context.Initialize(config_path);
 
-    // PlatformApp wires macOS-specific hooks/output/overlay onto the shared core.
+    // PlatformApp wires macOS-specific hooks/output onto the shared core.
     caps::platform::macos::PlatformApp platform_app(context);
     platform_app.Initialize();
     platform_app.Run();       // Blocks inside CFRunLoopRun() until Shutdown() is called.
-    platform_app.Shutdown();  // Ensures hooks/overlay are torn down before exit.
+    platform_app.Shutdown();  // Ensures hooks are torn down before exit.
 
     caps::core::logging::Info("[macOS::Main] Exiting skeleton");
     return 0;

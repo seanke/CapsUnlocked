@@ -5,7 +5,6 @@
 #include <cctype>
 
 #include "core/mapping/mapping_engine.h"
-#include "core/overlay/overlay_model.h"
 #include "core/logging.h"
 
 namespace caps::core {
@@ -31,25 +30,22 @@ std::string FormatAppForLog(const std::string& app) {
 
 } // namespace
 
-LayerController::LayerController(MappingEngine& mapping,
-                                 OverlayModel& overlay)
-    : mapping_(mapping), overlay_(overlay) {}
+LayerController::LayerController(MappingEngine& mapping)
+    : mapping_(mapping) {}
 
 // Platform adapters provide a callback that emits mapped actions when the layer is active.
 void LayerController::SetActionCallback(ActionCallback callback) {
     action_callback_ = std::move(callback);
 }
 
-// Called whenever CapsLock is held down; activates the layer and hides the overlay if present.
+// Called whenever CapsLock is held down; activates the layer.
 void LayerController::OnCapsLockPressed() {
     layer_active_ = true;
-    overlay_.Hide();
 }
 
-// Called when CapsLock is released; deactivates the layer and dismisses overlays.
+// Called when CapsLock is released; deactivates the layer.
 void LayerController::OnCapsLockReleased() {
     layer_active_ = false;
-    overlay_.Hide();
 }
 
 // Routes key events through the mapping table and fires the synthetic action callback.
@@ -86,11 +82,6 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
         action_callback_(mapping->action, event.pressed);
     }
     return true;
-}
-
-// Double-tapping CapsLock is interpreted as a request to show the reference overlay.
-void LayerController::OnDoubleTapCapsLock() {
-    overlay_.Show();
 }
 
 bool LayerController::IsLayerActive() const {

@@ -1,7 +1,7 @@
 #include "app_context.h"
 
-// CapsUnlocked core: central wiring point that stitches config, mapping, overlay,
-// and layer controller services together for platform entry points.
+// CapsUnlocked core: central wiring point that stitches config, mapping, and
+// layer controller services together for platform entry points.
 
 #include "core/logging.h"
 
@@ -9,7 +9,7 @@ namespace caps::core {
 
 AppContext::AppContext()
     : mapping_engine_(config_loader_),
-      layer_controller_(mapping_engine_, overlay_model_) {
+      layer_controller_(mapping_engine_) {
     logging::Info("[AppContext] Context constructed");
 }
 
@@ -21,9 +21,7 @@ void AppContext::Initialize(const std::string& config_path) {
     // Step 2: ensure the mapping engine has fresh caches before it serves lookups.
     mapping_engine_.Initialize();
     mapping_engine_.UpdateFromConfig();
-    // Step 3: snapshot the mapping list for overlay rendering.
-    overlay_model_.BindMappings(mapping_engine_);
-    // TODO: Wire config change notifications to mapping/overlay and persist context state.
+    // TODO: Wire config change notifications and persist context state.
 }
 
 ConfigLoader& AppContext::Config() {
@@ -32,10 +30,6 @@ ConfigLoader& AppContext::Config() {
 
 MappingEngine& AppContext::Mapping() {
     return mapping_engine_;
-}
-
-OverlayModel& AppContext::Overlay() {
-    return overlay_model_;
 }
 
 LayerController& AppContext::Layer() {

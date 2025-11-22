@@ -47,7 +47,7 @@ std::optional<MappingEngine::ResolvedMapping> MappingEngine::ResolveMapping(cons
     return std::nullopt;
 }
 
-// Exposes ordered rows for overlays, logging, or debugging tooling.
+// Exposes ordered rows for logging or debugging tooling.
 std::vector<MappingEngine::MappingEntry> MappingEngine::EnumerateMappings() const {
     std::vector<MappingEntry> ordered;
     for (const auto& [app, table] : resolved_) {

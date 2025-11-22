@@ -7,7 +7,6 @@
 #include "core/config/config_loader.h"
 #include "core/layer/layer_controller.h"
 #include "core/mapping/mapping_engine.h"
-#include "core/overlay/overlay_model.h"
 
 namespace fs = std::filesystem;
 
@@ -47,10 +46,7 @@ TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
     caps::core::MappingEngine mapping(loader);
     mapping.Initialize();
 
-    caps::core::OverlayModel overlay;
-    overlay.BindMappings(mapping);
-
-    caps::core::LayerController controller(mapping, overlay);
+    caps::core::LayerController controller(mapping);
 
     std::vector<std::pair<std::string, bool>> emitted;
     controller.SetActionCallback(

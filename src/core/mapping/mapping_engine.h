@@ -11,7 +11,7 @@
 namespace caps::core {
 
 // Lightweight view over ConfigLoader that exposes fast lookups and cached rows
-// for the overlay without re-reading the INI file.
+// without re-reading the INI file.
 class MappingEngine {
 public:
     explicit MappingEngine(const ConfigLoader& config);
