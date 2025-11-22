@@ -267,6 +267,12 @@ void KeyboardHook::UpdateCapsLockState(bool pressed) {
     capslock_down_ = pressed;
     std::ostringstream msg;
     msg << "[macOS::KeyboardHook] CapsLock " << (pressed ? "pressed" : "released");
+    if (app_monitor_) {
+        const std::string focus = app_monitor_->CurrentAppName();
+        if (!focus.empty()) {
+            msg << " (focus=" << focus << ")";
+        }
+    }
     core::logging::Debug(msg.str());
     if (!controller_) {
         return;

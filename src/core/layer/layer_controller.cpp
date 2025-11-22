@@ -2,12 +2,34 @@
 
 #include <utility>
 #include <sstream>
+#include <cctype>
 
 #include "core/mapping/mapping_engine.h"
 #include "core/overlay/overlay_model.h"
 #include "core/logging.h"
 
 namespace caps::core {
+
+namespace {
+
+std::string FormatAppForLog(const std::string& app) {
+    if (app.empty()) {
+        return "*";
+    }
+    std::string formatted;
+    formatted.reserve(app.size());
+    for (char ch : app) {
+        if (std::isalnum(static_cast<unsigned char>(ch))) {
+            formatted.push_back(ch);
+        }
+    }
+    if (formatted.empty()) {
+        return "*";
+    }
+    return formatted;
+}
+
+} // namespace
 
 LayerController::LayerController(MappingEngine& mapping,
                                  OverlayModel& overlay)
@@ -42,18 +64,15 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
         if (mapping) {
             std::ostringstream msg;
             const std::string resolved_app = mapping->app;
-            const std::string raw_app = event.app.empty() ? "*" : event.app;
+            const std::string map_app =
+                resolved_app == "*" ? std::string("*") : FormatAppForLog(event.app.empty() ? resolved_app : event.app);
             msg << "Caps-held key " << event.key << " mapped to " << mapping->action
-                << " (app=" << raw_app
-                << ", config_app=" << resolved_app
-                << ")";
+                << " (map=" << map_app << ")";
             logging::Debug(msg.str());
         } else {
             std::ostringstream msg;
             msg << "Caps-held key " << event.key << " has no mapping"
-                << " (app=" << (event.app.empty() ? "*" : event.app)
-                << ", config_app=" << normalized_app
-                << ")";
+                ;
             logging::Debug(msg.str());
         }
     }
