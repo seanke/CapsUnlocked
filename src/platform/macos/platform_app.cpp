@@ -18,7 +18,8 @@ namespace caps::platform::macos {
 
 PlatformApp::PlatformApp(core::AppContext& context)
     : context_(context),
-      keyboard_hook_(std::make_unique<KeyboardHook>()),
+      app_monitor_(std::make_unique<AppMonitor>()),
+      keyboard_hook_(std::make_unique<KeyboardHook>(app_monitor_.get())),
       output_(std::make_unique<Output>()),
       overlay_view_(std::make_unique<OverlayView>(context.Overlay())) {}
 

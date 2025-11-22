@@ -10,8 +10,6 @@
 #include <iterator>
 #include <sstream>
 #include <string>
-#include <libproc.h>
-#include <unistd.h>
 #include <ApplicationServices/ApplicationServices.h>
 
 #include "core/layer/layer_controller.h"
@@ -19,6 +17,8 @@
 #include "platform/macos/event_tag.h"
 
 namespace caps::platform::macos {
+
+KeyboardHook::KeyboardHook(AppMonitor* app_monitor) : app_monitor_(app_monitor) {}
 
 KeyboardHook::~KeyboardHook() {
     StopListening();
@@ -246,31 +246,13 @@ std::string KeyboardHook::ExtractKeyToken(CGEventRef event) {
     return token.str();
 }
 
-// Derives a normalized application identifier from the CGEvent's source process.
+// Derives a normalized application identifier using the shared AppMonitor.
 std::string KeyboardHook::ResolveAppForEvent(CGEventRef event) {
-    auto frontmost_pid = []() -> pid_t {
-        ProcessSerialNumber psn;
-        if (GetFrontProcess(&psn) != noErr) {
-            return -1;
-        }
-        pid_t pid = -1;
-        if (GetProcessPID(&psn, &pid) != noErr) {
-            return -1;
-        }
-        return pid;
-    };
-
-    pid_t pid = frontmost_pid();
-    if (pid <= 0 && event) {
-        pid = static_cast<pid_t>(CGEventGetIntegerValueField(event, kCGEventSourceUnixProcessID));
-    }
-
-    char name[PROC_PIDPATHINFO_MAXSIZE] = {};
-    const int length = proc_name(pid, name, sizeof(name));
-    if (length <= 0) {
+    if (!app_monitor_) {
         return "";
     }
-    return std::string(name, static_cast<size_t>(length));
+    (void)event;
+    return app_monitor_->CurrentAppName();
 }
 
 void KeyboardHook::UpdateCapsLockState(bool pressed) {

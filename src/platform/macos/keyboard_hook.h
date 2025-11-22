@@ -6,6 +6,8 @@
 
 #include <string>
 
+#include "platform/macos/app_monitor.h"
+
 namespace caps::core {
 class LayerController;
 struct KeyEvent;
@@ -17,7 +19,7 @@ namespace caps::platform::macos {
 // into the shared LayerController.
 class KeyboardHook {
 public:
-    KeyboardHook() = default;
+    explicit KeyboardHook(AppMonitor* app_monitor);
     ~KeyboardHook();
 
     // Configures the event tap and IOHID monitor. Returns false if the caller needs to
@@ -35,7 +37,7 @@ private:
     bool HandleCapsLock(CGEventRef event);
     bool HandleKey(CGEventRef event, bool pressed);
     static std::string ExtractKeyToken(CGEventRef event);
-    static std::string ResolveAppForEvent(CGEventRef event);
+    std::string ResolveAppForEvent(CGEventRef event);
     bool EnsureAccessibilityPrivileges() const;
     bool EnsureInputMonitoringPrivileges() const;
     // Normalizes CapsLock transitions to a single place so both CGEvent and IOHID paths reuse it.
@@ -56,6 +58,7 @@ private:
     bool hid_scheduled_{false};
     bool hid_open_{false};
     bool capslock_down_{false};
+    AppMonitor* app_monitor_{nullptr}; // Not owned.
 };
 
 } // namespace caps::platform::macos
