@@ -1,5 +1,6 @@
 #pragma once
 
+#include <windows.h>
 #include <memory>
 #include <string>
 
@@ -12,7 +13,7 @@ class AppContext;
 
 namespace caps::platform::windows {
 
-// Windows twin to the mac adapter; currently scaffolding but documents lifecycle.
+// Windows platform adapter: manages hook installation and message loop.
 class PlatformApp {
 public:
     explicit PlatformApp(core::AppContext& context);
@@ -25,6 +26,7 @@ private:
     core::AppContext& context_;
     std::unique_ptr<KeyboardHook> keyboard_hook_;
     std::unique_ptr<Output> output_;
+    DWORD main_thread_id_{0};
 };
 
 } // namespace caps::platform::windows

@@ -22,6 +22,7 @@ PlatformApp::PlatformApp(core::AppContext& context)
 // Establishes hooks and wiring so mapped actions get emitted via Output.
 void PlatformApp::Initialize() {
     core::logging::Info("[Windows::PlatformApp] Initializing platform app");
+    main_thread_id_ = GetCurrentThreadId();
     keyboard_hook_->Install(context_.Layer());
     context_.Layer().SetActionCallback(
         [this](const std::string& action, bool pressed) { output_->Emit(action, pressed); });
@@ -46,6 +47,11 @@ void PlatformApp::Run() {
 void PlatformApp::Shutdown() {
     core::logging::Info("[Windows::PlatformApp] Shutting down platform app");
     keyboard_hook_->StopListening();
+    
+    // Post WM_QUIT to exit the message loop if it's running
+    if (main_thread_id_ != 0) {
+        PostThreadMessage(main_thread_id_, WM_QUIT, 0, 0);
+    }
 }
 
 } // namespace caps::platform::windows
