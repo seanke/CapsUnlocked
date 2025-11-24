@@ -8,6 +8,25 @@ namespace caps::platform::windows {
 
 namespace {
 
+std::string WideToUtf8(const std::wstring& wide) {
+    if (wide.empty()) {
+        return "";
+    }
+    
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), 
+                                          static_cast<int>(wide.length()), 
+                                          nullptr, 0, nullptr, nullptr);
+    if (size_needed <= 0) {
+        return "";
+    }
+    
+    std::string result(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), 
+                       static_cast<int>(wide.length()),
+                       &result[0], size_needed, nullptr, nullptr);
+    return result;
+}
+
 std::string GetProcessName(HWND hwnd) {
     DWORD process_id = 0;
     GetWindowThreadProcessId(hwnd, &process_id);
@@ -33,8 +52,8 @@ std::string GetProcessName(HWND hwnd) {
             if (ext_pos != std::wstring::npos && ext_pos == exe_name.size() - 4) {
                 exe_name = exe_name.substr(0, ext_pos);
             }
-            // Convert wide string to narrow string
-            std::string result(exe_name.begin(), exe_name.end());
+            // Convert wide string to UTF-8
+            std::string result = WideToUtf8(exe_name);
             CloseHandle(process);
             return result;
         }
@@ -61,8 +80,7 @@ std::string AppMonitor::CurrentAppName() const {
     // Fallback to window title if process name unavailable
     wchar_t title[256] = {};
     if (GetWindowTextW(foreground, title, 256) > 0) {
-        std::wstring wide_title(title);
-        return std::string(wide_title.begin(), wide_title.end());
+        return WideToUtf8(std::wstring(title));
     }
 
     return "";
