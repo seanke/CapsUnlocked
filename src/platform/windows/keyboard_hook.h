@@ -3,6 +3,8 @@
 #include <windows.h>
 #include <string>
 
+#include "platform/windows/app_monitor.h"
+
 namespace caps::core {
 class LayerController;
 struct KeyEvent;
@@ -13,6 +15,8 @@ namespace caps::platform::windows {
 // Win32 low-level keyboard hook adapter that forwards key events to LayerController.
 class KeyboardHook {
 public:
+    explicit KeyboardHook(AppMonitor* app_monitor);
+    
     void Install(core::LayerController& controller);
     void StartListening();
     void StopListening();
@@ -23,9 +27,11 @@ private:
     bool HandleCapsLock(DWORD vkCode, bool pressed);
     bool HandleKey(DWORD vkCode, DWORD scanCode, bool pressed);
     static std::string ExtractKeyToken(DWORD vkCode, DWORD scanCode);
+    std::string ResolveAppForEvent();
     void UpdateCapsLockState(bool pressed);
 
     core::LayerController* controller_{nullptr};
+    AppMonitor* app_monitor_{nullptr};
     HHOOK hook_handle_{nullptr};
     bool capslock_down_{false};
     

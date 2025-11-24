@@ -16,6 +16,8 @@ namespace caps::platform::windows {
 // Static instance pointer for the global hook callback
 KeyboardHook* KeyboardHook::instance_ = nullptr;
 
+KeyboardHook::KeyboardHook(AppMonitor* app_monitor) : app_monitor_(app_monitor) {}
+
 void KeyboardHook::Install(core::LayerController& controller) {
     controller_ = &controller;
     instance_ = this;
@@ -123,8 +125,8 @@ bool KeyboardHook::HandleKey(DWORD vkCode, DWORD scanCode, bool pressed) {
         return false;
     }
 
-    // Forward into the shared controller
-    core::KeyEvent key_event{token, "", pressed};
+    // Forward into the shared controller with app context
+    core::KeyEvent key_event{token, ResolveAppForEvent(), pressed};
     return controller_->OnKeyEvent(key_event);
 }
 
@@ -146,6 +148,14 @@ std::string KeyboardHook::ExtractKeyToken(DWORD vkCode, DWORD scanCode) {
     return token.str();
 }
 
+// Derives a normalized application identifier using the shared AppMonitor
+std::string KeyboardHook::ResolveAppForEvent() {
+    if (!app_monitor_) {
+        return "";
+    }
+    return app_monitor_->CurrentAppName();
+}
+
 // Update CapsLock state and notify the controller
 void KeyboardHook::UpdateCapsLockState(bool pressed) {
     if (pressed == capslock_down_) {
@@ -159,6 +169,12 @@ void KeyboardHook::UpdateCapsLockState(bool pressed) {
     capslock_down_ = pressed;
     std::ostringstream msg;
     msg << "[Windows::KeyboardHook] CapsLock " << (pressed ? "pressed" : "released");
+    if (app_monitor_) {
+        const std::string focus = app_monitor_->CurrentAppName();
+        if (!focus.empty()) {
+            msg << " (focus=" << focus << ")";
+        }
+    }
     core::logging::Debug(msg.str());
 
     if (!controller_) {

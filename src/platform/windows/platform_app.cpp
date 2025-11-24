@@ -9,6 +9,7 @@
 #include "core/app_context.h"
 #include "core/layer/layer_controller.h"
 #include "core/logging.h"
+#include "platform/windows/app_monitor.h"
 #include "platform/windows/keyboard_hook.h"
 #include "platform/windows/output.h"
 
@@ -16,7 +17,8 @@ namespace caps::platform::windows {
 
 PlatformApp::PlatformApp(core::AppContext& context)
     : context_(context),
-      keyboard_hook_(std::make_unique<KeyboardHook>()),
+      app_monitor_(std::make_unique<AppMonitor>()),
+      keyboard_hook_(std::make_unique<KeyboardHook>(app_monitor_.get())),
       output_(std::make_unique<Output>()) {}
 
 // Establishes hooks and wiring so mapped actions get emitted via Output.
