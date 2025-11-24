@@ -159,9 +159,6 @@ std::string KeyboardHook::ResolveAppForEvent() {
 // Update CapsLock state and notify the controller
 void KeyboardHook::UpdateCapsLockState(bool pressed) {
     if (pressed == capslock_down_) {
-        if (pressed) {
-            core::logging::Debug("[Windows::KeyboardHook] CapsLock held");
-        }
         return;
     }
 
