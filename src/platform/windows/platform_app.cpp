@@ -3,6 +3,7 @@
 // CapsUnlocked Windows entry adapter: coordinates hook setup and
 // run-loop scaffolding for the Windows-specific executable.
 
+#include <windows.h>
 #include <memory>
 
 #include "core/app_context.h"
@@ -24,21 +25,27 @@ void PlatformApp::Initialize() {
     keyboard_hook_->Install(context_.Layer());
     context_.Layer().SetActionCallback(
         [this](const std::string& action, bool pressed) { output_->Emit(action, pressed); });
-    // TODO: Load configuration and set up message loop.
 }
 
-// Placeholder run-loop stub; real implementation will pump Win32 messages.
+// Runs the Windows message loop to process keyboard hook events.
 void PlatformApp::Run() {
-    core::logging::Info("[Windows::PlatformApp] Running message loop stub");
+    core::logging::Info("[Windows::PlatformApp] Running message loop");
     keyboard_hook_->StartListening();
-    // TODO: Pump Windows messages until shutdown is requested.
+    
+    // Run the Windows message loop
+    MSG msg = {};
+    while (GetMessage(&msg, nullptr, 0, 0) > 0) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+    
+    core::logging::Info("[Windows::PlatformApp] Message loop exited");
 }
 
 // Cleans up hook state so Windows releases our low-level listeners cleanly.
 void PlatformApp::Shutdown() {
     core::logging::Info("[Windows::PlatformApp] Shutting down platform app");
     keyboard_hook_->StopListening();
-    // TODO: Release Win32 resources and unhook keyboard.
 }
 
 } // namespace caps::platform::windows
