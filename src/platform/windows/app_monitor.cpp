@@ -13,16 +13,16 @@ std::string WideToUtf8(const std::wstring& wide) {
         return "";
     }
     
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), 
-                                          static_cast<int>(wide.length()), 
+    // Use -1 to auto-detect null terminator for safer conversion
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, 
                                           nullptr, 0, nullptr, nullptr);
     if (size_needed <= 0) {
         return "";
     }
     
-    std::string result(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), 
-                       static_cast<int>(wide.length()),
+    // size_needed includes the null terminator, so subtract 1 for the string content
+    std::string result(size_needed - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1,
                        &result[0], size_needed, nullptr, nullptr);
     return result;
 }

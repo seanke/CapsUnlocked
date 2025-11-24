@@ -5,6 +5,7 @@
 
 #include <windows.h>
 #include <memory>
+#include <sstream>
 
 #include "core/app_context.h"
 #include "core/layer/layer_controller.h"
@@ -37,7 +38,16 @@ void PlatformApp::Run() {
     
     // Run the Windows message loop
     MSG msg = {};
-    while (GetMessage(&msg, nullptr, 0, 0) > 0) {
+    BOOL result;
+    while ((result = GetMessage(&msg, nullptr, 0, 0)) != 0) {
+        if (result == -1) {
+            // Error occurred in GetMessage
+            const DWORD error = GetLastError();
+            std::ostringstream err_msg;
+            err_msg << "[Windows::PlatformApp] GetMessage error: 0x" << std::hex << error;
+            core::logging::Error(err_msg.str());
+            break;
+        }
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
