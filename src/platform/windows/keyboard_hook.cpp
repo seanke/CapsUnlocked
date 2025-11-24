@@ -113,11 +113,6 @@ bool KeyboardHook::HandleCapsLock(DWORD vkCode, bool pressed) {
 
 // Forward key events to the layer controller
 bool KeyboardHook::HandleKey(DWORD vkCode, DWORD scanCode, bool pressed) {
-    if (vkCode == VK_CAPITAL) {
-        UpdateCapsLockState(pressed);
-        return true;
-    }
-
     if (!controller_) {
         return false;
     }
