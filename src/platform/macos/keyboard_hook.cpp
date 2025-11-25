@@ -256,9 +256,6 @@ std::string KeyboardHook::ResolveAppForEvent(CGEventRef event) {
 
 void KeyboardHook::UpdateCapsLockState(bool pressed) {
     if (pressed == capslock_down_) {
-        if (pressed) {
-            core::logging::Debug("[macOS::KeyboardHook] CapsLock held");
-        }
         return;
     }
 
