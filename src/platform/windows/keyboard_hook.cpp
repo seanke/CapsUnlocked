@@ -113,6 +113,31 @@ bool KeyboardHook::HandleCapsLock(DWORD vkCode, bool pressed) {
     return true; // Always swallow CapsLock events
 }
 
+// Bitmask to check if a key is currently pressed (high bit of GetAsyncKeyState result).
+constexpr SHORT kKeyPressedMask = static_cast<SHORT>(0x8000);
+
+// Queries the current state of modifier keys using GetAsyncKeyState.
+core::Modifiers KeyboardHook::GetCurrentModifiers() {
+    core::Modifiers mods = core::Modifiers::None;
+    
+    // GetAsyncKeyState returns the key state at the time of the call.
+    // The high bit indicates if the key is currently down.
+    if (GetAsyncKeyState(VK_SHIFT) & kKeyPressedMask) {
+        mods = mods | core::Modifiers::Shift;
+    }
+    if (GetAsyncKeyState(VK_CONTROL) & kKeyPressedMask) {
+        mods = mods | core::Modifiers::Control;
+    }
+    if (GetAsyncKeyState(VK_MENU) & kKeyPressedMask) {  // VK_MENU is Alt
+        mods = mods | core::Modifiers::Alt;
+    }
+    if ((GetAsyncKeyState(VK_LWIN) & kKeyPressedMask) || (GetAsyncKeyState(VK_RWIN) & kKeyPressedMask)) {
+        mods = mods | core::Modifiers::Meta;
+    }
+    
+    return mods;
+}
+
 // Forward key events to the layer controller
 bool KeyboardHook::HandleKey(DWORD vkCode, DWORD scanCode, bool pressed) {
     if (!controller_) {
@@ -125,8 +150,11 @@ bool KeyboardHook::HandleKey(DWORD vkCode, DWORD scanCode, bool pressed) {
         return false;
     }
 
-    // Forward into the shared controller with app context
-    core::KeyEvent key_event{token, ResolveAppForEvent(), pressed};
+    // Capture current modifier state so synthetic events can preserve it
+    const core::Modifiers modifiers = GetCurrentModifiers();
+    
+    // Forward into the shared controller with app context and modifier state
+    core::KeyEvent key_event{token, ResolveAppForEvent(), pressed, modifiers};
     return controller_->OnKeyEvent(key_event);
 }
 

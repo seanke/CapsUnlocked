@@ -78,7 +78,8 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
 
     if (action_callback_) {
         // Notify the platform adapter so it can emit synthetic events immediately.
-        action_callback_(mapping->action, event.pressed);
+        // Pass through the modifier state so that combinations like Ctrl+mapped-key work.
+        action_callback_(mapping->action, event.pressed, event.modifiers);
     }
     return true;
 }

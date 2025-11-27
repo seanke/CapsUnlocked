@@ -29,8 +29,11 @@ void PlatformApp::Initialize() {
             "System Settings → Privacy & Security → Input Monitoring and restart the app.");
     }
     // When the layer resolves a mapping, immediately emit the CGEvent via Output.
+    // Pass through modifier state so combinations like Ctrl+mapped-key work correctly.
     context_.Layer().SetActionCallback(
-        [this](const std::string& action, bool pressed) { output_->Emit(action, pressed); });
+        [this](const std::string& action, bool pressed, core::Modifiers modifiers) {
+            output_->Emit(action, pressed, modifiers);
+        });
 }
 
 // Starts listening for events and blocks inside CFRunLoopRun() until Shutdown() is called.

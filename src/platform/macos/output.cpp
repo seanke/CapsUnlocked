@@ -93,8 +93,26 @@ std::optional<CGKeyCode> LookupKeyCode(const std::string& action) {
 
 } // namespace
 
+// Converts the platform-neutral Modifiers enum to macOS CGEventFlags.
+CGEventFlags ModifiersToCGFlags(caps::core::Modifiers modifiers) {
+    CGEventFlags flags = 0;
+    if (caps::core::HasModifier(modifiers, caps::core::Modifiers::Shift)) {
+        flags |= kCGEventFlagMaskShift;
+    }
+    if (caps::core::HasModifier(modifiers, caps::core::Modifiers::Control)) {
+        flags |= kCGEventFlagMaskControl;
+    }
+    if (caps::core::HasModifier(modifiers, caps::core::Modifiers::Alt)) {
+        flags |= kCGEventFlagMaskAlternate;
+    }
+    if (caps::core::HasModifier(modifiers, caps::core::Modifiers::Meta)) {
+        flags |= kCGEventFlagMaskCommand;
+    }
+    return flags;
+}
+
 // Emits a synthetic key press/release corresponding to the mapped action string.
-void Output::Emit(const std::string& action, bool pressed) {
+void Output::Emit(const std::string& action, bool pressed, caps::core::Modifiers modifiers) {
     const auto key_code = LookupKeyCode(action);
     if (!key_code) {
         core::logging::Warn("[macOS::Output] Unknown action '" + action + "'");
@@ -105,6 +123,13 @@ void Output::Emit(const std::string& action, bool pressed) {
     if (!event) {
         core::logging::Error("[macOS::Output] Failed to create CGEvent for " + action);
         return;
+    }
+
+    // Preserve any active modifier keys (Ctrl, Shift, Alt/Option, Cmd) from the original event.
+    // This allows combinations like Ctrl+mapped-key to work correctly.
+    const CGEventFlags mod_flags = ModifiersToCGFlags(modifiers);
+    if (mod_flags != 0) {
+        CGEventSetFlags(event, mod_flags);
     }
 
     CGEventSetIntegerValueField(event, kCGEventSourceUserData, kSyntheticEventTag);

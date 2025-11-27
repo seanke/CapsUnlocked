@@ -6,12 +6,8 @@
 
 #include <string>
 
+#include "core/layer/layer_controller.h"
 #include "platform/macos/app_monitor.h"
-
-namespace caps::core {
-class LayerController;
-struct KeyEvent;
-} // namespace caps::core
 
 namespace caps::platform::macos {
 
@@ -37,6 +33,7 @@ private:
     bool HandleCapsLock(CGEventRef event);
     bool HandleKey(CGEventRef event, bool pressed);
     static std::string ExtractKeyToken(CGEventRef event);
+    static core::Modifiers ExtractModifiers(CGEventRef event);
     std::string ResolveAppForEvent(CGEventRef event);
     bool EnsureAccessibilityPrivileges() const;
     bool EnsureInputMonitoringPrivileges() const;
