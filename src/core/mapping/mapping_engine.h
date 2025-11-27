@@ -41,12 +41,9 @@ public:
         std::string target;
     };
     [[nodiscard]] std::vector<MappingEntry> EnumerateMappings() const;
-    static std::string NormalizeAppToken(const std::string& app);
-    static std::string NormalizeModifierSet(const std::set<std::string>& modifiers);
 
 private:
     void RebuildTable();
-    static std::string NormalizeToken(const std::string& key);
 
     const ConfigLoader& config_;
     // app -> modifier -> key -> target

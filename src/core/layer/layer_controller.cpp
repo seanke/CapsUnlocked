@@ -6,6 +6,7 @@
 
 #include "core/mapping/mapping_engine.h"
 #include "core/logging.h"
+#include "core/string_utils.h"
 
 namespace caps::core {
 
@@ -26,16 +27,6 @@ std::string FormatAppForLog(const std::string& app) {
         return "*";
     }
     return formatted;
-}
-
-std::string NormalizeKey(const std::string& key) {
-    std::string normalized;
-    for (char ch : key) {
-        if (!std::isspace(static_cast<unsigned char>(ch))) {
-            normalized.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
-        }
-    }
-    return normalized;
 }
 
 } // namespace
@@ -62,7 +53,7 @@ void LayerController::OnCapsLockReleased() {
 
 // Check if a key is a layer modifier that changes mapping lookup
 bool LayerController::IsLayerModifier(const std::string& key) {
-    const std::string normalized = NormalizeKey(key);
+    const std::string normalized = NormalizeKeyToken(key);
     // A and S are the layer modifiers for navigation and selection
     return normalized == "A" || normalized == "S";
 }
@@ -73,7 +64,7 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
         return false;
     }
 
-    const std::string normalized_key = NormalizeKey(event.key);
+    const std::string normalized_key = NormalizeKeyToken(event.key);
 
     // Track layer modifier keys (A, S) separately
     if (IsLayerModifier(event.key)) {
