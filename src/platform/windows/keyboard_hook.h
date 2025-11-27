@@ -3,12 +3,8 @@
 #include <windows.h>
 #include <string>
 
+#include "core/layer/layer_controller.h"
 #include "platform/windows/app_monitor.h"
-
-namespace caps::core {
-class LayerController;
-struct KeyEvent;
-}
 
 namespace caps::platform::windows {
 
@@ -29,6 +25,7 @@ private:
     static std::string ExtractKeyToken(DWORD vkCode, DWORD scanCode);
     std::string ResolveAppForEvent();
     void UpdateCapsLockState(bool pressed);
+    static core::Modifiers GetCurrentModifiers();
 
     core::LayerController* controller_{nullptr};
     AppMonitor* app_monitor_{nullptr};

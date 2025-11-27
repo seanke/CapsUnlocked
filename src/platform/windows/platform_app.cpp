@@ -28,7 +28,9 @@ void PlatformApp::Initialize() {
     main_thread_id_ = GetCurrentThreadId();
     keyboard_hook_->Install(context_.Layer());
     context_.Layer().SetActionCallback(
-        [this](const std::string& action, bool pressed) { output_->Emit(action, pressed); });
+        [this](const std::string& action, bool pressed, core::Modifiers modifiers) {
+            output_->Emit(action, pressed, modifiers);
+        });
 }
 
 // Runs the Windows message loop to process keyboard hook events.

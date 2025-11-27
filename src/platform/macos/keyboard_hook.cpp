@@ -215,9 +215,33 @@ bool KeyboardHook::HandleKey(CGEventRef event, bool pressed) {
         return false;
     }
 
+    // Capture modifier state from the event so synthetic output can preserve it
+    const core::Modifiers modifiers = ExtractModifiers(event);
+    
     // Forward into the shared controller so it can decide whether to emit a mapping.
-    core::KeyEvent key_event{token, ResolveAppForEvent(event), pressed};
+    core::KeyEvent key_event{token, ResolveAppForEvent(event), pressed, modifiers};
     return controller_->OnKeyEvent(key_event);
+}
+
+// Extracts active modifier keys from a CGEvent and converts to the core Modifiers enum.
+core::Modifiers KeyboardHook::ExtractModifiers(CGEventRef event) {
+    core::Modifiers mods = core::Modifiers::None;
+    const CGEventFlags flags = CGEventGetFlags(event);
+    
+    if (flags & kCGEventFlagMaskShift) {
+        mods = mods | core::Modifiers::Shift;
+    }
+    if (flags & kCGEventFlagMaskControl) {
+        mods = mods | core::Modifiers::Control;
+    }
+    if (flags & kCGEventFlagMaskAlternate) {
+        mods = mods | core::Modifiers::Alt;
+    }
+    if (flags & kCGEventFlagMaskCommand) {
+        mods = mods | core::Modifiers::Meta;
+    }
+    
+    return mods;
 }
 
 std::string KeyboardHook::ExtractKeyToken(CGEventRef event) {

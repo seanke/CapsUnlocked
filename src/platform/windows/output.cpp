@@ -87,8 +87,11 @@ std::optional<WORD> LookupKeyCode(const std::string& action) {
 
 } // namespace
 
-// Emits a synthetic key press/release corresponding to the mapped action string
-void Output::Emit(const std::string& action, bool pressed) {
+// Emits a synthetic key press/release corresponding to the mapped action string.
+// The modifiers parameter is currently unused on Windows because modifier keys that are
+// physically held are automatically recognized by applications. However, we accept the
+// parameter for API consistency with macOS.
+void Output::Emit(const std::string& action, bool pressed, caps::core::Modifiers /*modifiers*/) {
     const auto vk_code = LookupKeyCode(action);
     if (!vk_code) {
         core::logging::Warn("[Windows::Output] Unknown action '" + action + "'");

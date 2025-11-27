@@ -48,9 +48,16 @@ TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
 
     caps::core::LayerController controller(mapping);
 
-    std::vector<std::pair<std::string, bool>> emitted;
+    struct EmittedAction {
+        std::string action;
+        bool pressed;
+        caps::core::Modifiers modifiers;
+    };
+    std::vector<EmittedAction> emitted;
     controller.SetActionCallback(
-        [&emitted](const std::string& action, bool pressed) { emitted.emplace_back(action, pressed); });
+        [&emitted](const std::string& action, bool pressed, caps::core::Modifiers modifiers) {
+            emitted.push_back({action, pressed, modifiers});
+        });
 
     // Layer inactive: events pass through untouched.
     EXPECT_FALSE(controller.OnKeyEvent({"H", "", true}));
@@ -62,9 +69,9 @@ TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
     EXPECT_TRUE(controller.OnKeyEvent({"H", "", false}));
 
     ASSERT_EQ(2u, emitted.size());
-    EXPECT_EQ("LEFT", emitted[0].first);
-    EXPECT_TRUE(emitted[0].second);
-    EXPECT_FALSE(emitted[1].second);
+    EXPECT_EQ("LEFT", emitted[0].action);
+    EXPECT_TRUE(emitted[0].pressed);
+    EXPECT_FALSE(emitted[1].pressed);
 
     // Unmapped keys are still swallowed while the layer is active.
     EXPECT_TRUE(controller.OnKeyEvent({"Z", "", true}));
@@ -73,4 +80,48 @@ TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
     controller.OnCapsLockReleased();
     EXPECT_FALSE(controller.IsLayerActive());
     EXPECT_FALSE(controller.OnKeyEvent({"H", "", true}));
+}
+
+TEST_F(LayerControllerTest, PreservesModifiersInMappedActions) {
+    const fs::path config_path = WriteConfig("* l Right\n");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine mapping(loader);
+    mapping.Initialize();
+
+    caps::core::LayerController controller(mapping);
+
+    struct EmittedAction {
+        std::string action;
+        bool pressed;
+        caps::core::Modifiers modifiers;
+    };
+    std::vector<EmittedAction> emitted;
+    controller.SetActionCallback(
+        [&emitted](const std::string& action, bool pressed, caps::core::Modifiers modifiers) {
+            emitted.push_back({action, pressed, modifiers});
+        });
+
+    controller.OnCapsLockPressed();
+    ASSERT_TRUE(controller.IsLayerActive());
+
+    // Simulate Ctrl+L while CapsLock is held - should emit Ctrl+Right
+    caps::core::KeyEvent ctrl_l_down{"L", "", true, caps::core::Modifiers::Control};
+    EXPECT_TRUE(controller.OnKeyEvent(ctrl_l_down));
+
+    caps::core::KeyEvent ctrl_l_up{"L", "", false, caps::core::Modifiers::Control};
+    EXPECT_TRUE(controller.OnKeyEvent(ctrl_l_up));
+
+    ASSERT_EQ(2u, emitted.size());
+    EXPECT_EQ("RIGHT", emitted[0].action);
+    EXPECT_TRUE(emitted[0].pressed);
+    EXPECT_TRUE(caps::core::HasModifier(emitted[0].modifiers, caps::core::Modifiers::Control));
+    
+    EXPECT_EQ("RIGHT", emitted[1].action);
+    EXPECT_FALSE(emitted[1].pressed);
+    EXPECT_TRUE(caps::core::HasModifier(emitted[1].modifiers, caps::core::Modifiers::Control));
+
+    controller.OnCapsLockReleased();
 }
