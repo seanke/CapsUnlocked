@@ -12,6 +12,13 @@ namespace fs = std::filesystem;
 
 namespace {
 
+// Helper struct to capture emitted actions in tests.
+struct EmittedAction {
+    std::string action;
+    bool pressed;
+    caps::core::Modifiers modifiers;
+};
+
 class LayerControllerTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -48,11 +55,6 @@ TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
 
     caps::core::LayerController controller(mapping);
 
-    struct EmittedAction {
-        std::string action;
-        bool pressed;
-        caps::core::Modifiers modifiers;
-    };
     std::vector<EmittedAction> emitted;
     controller.SetActionCallback(
         [&emitted](const std::string& action, bool pressed, caps::core::Modifiers modifiers) {
@@ -93,11 +95,6 @@ TEST_F(LayerControllerTest, PreservesModifiersInMappedActions) {
 
     caps::core::LayerController controller(mapping);
 
-    struct EmittedAction {
-        std::string action;
-        bool pressed;
-        caps::core::Modifiers modifiers;
-    };
     std::vector<EmittedAction> emitted;
     controller.SetActionCallback(
         [&emitted](const std::string& action, bool pressed, caps::core::Modifiers modifiers) {
