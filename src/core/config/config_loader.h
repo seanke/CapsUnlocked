@@ -9,7 +9,9 @@ namespace caps::core {
 // rest of the core can query without touching the filesystem again.
 class ConfigLoader {
 public:
-    using MappingTable = std::map<std::string, std::map<std::string, std::string>>;
+    // MappingTable structure: app -> modifier -> source -> target
+    // Modifier is a normalized string like "*" (no modifier), "A", "S", or "A+S"
+    using MappingTable = std::map<std::string, std::map<std::string, std::map<std::string, std::string>>>;
 
     ConfigLoader();
 
@@ -27,6 +29,7 @@ private:
     [[nodiscard]] static MappingTable BuildDefaultMappings();
     [[nodiscard]] static std::string NormalizeKeyToken(const std::string& token);
     [[nodiscard]] static std::string NormalizeAppToken(const std::string& token);
+    [[nodiscard]] static std::string NormalizeModifierToken(const std::string& token);
     [[nodiscard]] static std::string Trim(const std::string& value);
 
     std::string config_path_;

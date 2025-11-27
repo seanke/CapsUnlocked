@@ -28,6 +28,16 @@ std::string FormatAppForLog(const std::string& app) {
     return formatted;
 }
 
+std::string NormalizeKey(const std::string& key) {
+    std::string normalized;
+    for (char ch : key) {
+        if (!std::isspace(static_cast<unsigned char>(ch))) {
+            normalized.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+        }
+    }
+    return normalized;
+}
+
 } // namespace
 
 LayerController::LayerController(MappingEngine& mapping)
@@ -41,11 +51,20 @@ void LayerController::SetActionCallback(ActionCallback callback) {
 // Called whenever CapsLock is held down; activates the layer.
 void LayerController::OnCapsLockPressed() {
     layer_active_ = true;
+    active_modifiers_.clear(); // Reset modifiers when layer is activated
 }
 
 // Called when CapsLock is released; deactivates the layer.
 void LayerController::OnCapsLockReleased() {
     layer_active_ = false;
+    active_modifiers_.clear(); // Clear modifiers when layer is deactivated
+}
+
+// Check if a key is a layer modifier that changes mapping lookup
+bool LayerController::IsLayerModifier(const std::string& key) {
+    const std::string normalized = NormalizeKey(key);
+    // A and S are the layer modifiers for navigation and selection
+    return normalized == "A" || normalized == "S";
 }
 
 // Routes key events through the mapping table and fires the synthetic action callback.
@@ -54,7 +73,20 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
         return false;
     }
 
-    const auto mapping = mapping_.ResolveMapping(event.key, event.app);
+    const std::string normalized_key = NormalizeKey(event.key);
+
+    // Track layer modifier keys (A, S) separately
+    if (IsLayerModifier(event.key)) {
+        if (event.pressed) {
+            active_modifiers_.insert(normalized_key);
+        } else {
+            active_modifiers_.erase(normalized_key);
+        }
+        // Swallow modifier key events while layer is active
+        return true;
+    }
+
+    const auto mapping = mapping_.ResolveMapping(event.key, event.app, active_modifiers_);
     if (event.pressed) {
         if (mapping) {
             std::ostringstream msg;
@@ -62,12 +94,11 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
             const std::string map_app =
                 resolved_app == "*" ? std::string("*") : FormatAppForLog(event.app.empty() ? resolved_app : event.app);
             msg << "Caps-held key " << event.key << " mapped to " << mapping->action
-                << " (map=" << map_app << ")";
+                << " (app=" << map_app << ", mod=" << mapping->modifier << ")";
             logging::Debug(msg.str());
         } else {
             std::ostringstream msg;
-            msg << "Caps-held key " << event.key << " has no mapping"
-                ;
+            msg << "Caps-held key " << event.key << " has no mapping";
             logging::Debug(msg.str());
         }
     }
@@ -85,6 +116,10 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
 
 bool LayerController::IsLayerActive() const {
     return layer_active_;
+}
+
+const std::set<std::string>& LayerController::GetActiveModifiers() const {
+    return active_modifiers_;
 }
 
 } // namespace caps::core

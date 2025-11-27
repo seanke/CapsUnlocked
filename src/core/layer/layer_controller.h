@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <set>
 #include <string>
 
 namespace caps::core {
@@ -29,11 +30,16 @@ public:
     bool OnKeyEvent(const KeyEvent& event);
 
     [[nodiscard]] bool IsLayerActive() const;
+    [[nodiscard]] const std::set<std::string>& GetActiveModifiers() const;
 
 private:
+    // Check if a key is a layer modifier (A, S, etc.) that affects mapping lookup
+    static bool IsLayerModifier(const std::string& key);
+
     MappingEngine& mapping_;
     ActionCallback action_callback_;
     bool layer_active_{false};
+    std::set<std::string> active_modifiers_; // Currently held layer modifiers (A, S, etc.)
 };
 
 } // namespace caps::core
