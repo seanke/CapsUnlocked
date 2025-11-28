@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <set>
 #include <string>
 
 namespace caps::core {
@@ -29,11 +30,13 @@ public:
     bool OnKeyEvent(const KeyEvent& event);
 
     [[nodiscard]] bool IsLayerActive() const;
+    [[nodiscard]] const std::set<std::string>& GetActiveModifiers() const;
 
 private:
     MappingEngine& mapping_;
     ActionCallback action_callback_;
     bool layer_active_{false};
+    std::set<std::string> active_modifiers_; // Currently pressed modifier keys
 };
 
 } // namespace caps::core

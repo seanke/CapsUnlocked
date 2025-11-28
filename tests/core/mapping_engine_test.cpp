@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <set>
 
 #include "core/config/config_loader.h"
 #include "core/mapping/mapping_engine.h"
@@ -70,4 +71,161 @@ TEST_F(MappingEngineTest, ResolvesAndReloadsMappings) {
     EXPECT_EQ("*", entries.front().app);
     EXPECT_EQ("L", entries.front().source);
     EXPECT_EQ("RIGHT", entries.front().target);
+}
+
+// New tests for modifier support
+
+TEST_F(MappingEngineTest, ResolvesWithModifiers) {
+    const fs::path config_path = WriteConfig(R"(
+[modifiers]
+a
+s
+
+[maps]
+[*] [a s] [j] [Shift End]
+[*] [] [j] [Down]
+)");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine engine(loader);
+    engine.Initialize();
+
+    // Without modifiers, should get Down
+    std::set<std::string> no_mods;
+    auto result = engine.ResolveMapping("j", "", no_mods);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ("DOWN", result->action);
+    EXPECT_TRUE(result->required_mods.empty());
+
+    // With both modifiers, should get Shift End
+    std::set<std::string> both_mods = {"A", "S"};
+    result = engine.ResolveMapping("j", "", both_mods);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ("SHIFT END", result->action);
+    EXPECT_EQ(2u, result->required_mods.size());
+
+    // With only one modifier, should get Down (fallback)
+    std::set<std::string> one_mod = {"A"};
+    result = engine.ResolveMapping("j", "", one_mod);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ("DOWN", result->action);
+}
+
+TEST_F(MappingEngineTest, IsModifier) {
+    const fs::path config_path = WriteConfig(R"(
+[modifiers]
+a
+s
+
+[maps]
+[*] [j] [Down]
+)");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine engine(loader);
+    engine.Initialize();
+
+    EXPECT_TRUE(engine.IsModifier("a"));
+    EXPECT_TRUE(engine.IsModifier("A"));
+    EXPECT_TRUE(engine.IsModifier("s"));
+    EXPECT_FALSE(engine.IsModifier("j"));
+    EXPECT_FALSE(engine.IsModifier("h"));
+}
+
+TEST_F(MappingEngineTest, GetModifiers) {
+    const fs::path config_path = WriteConfig(R"(
+[modifiers]
+a
+s
+Ctrl
+
+[maps]
+[*] [j] [Down]
+)");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine engine(loader);
+    engine.Initialize();
+
+    const auto& mods = engine.GetModifiers();
+    EXPECT_EQ(3u, mods.size());
+    EXPECT_TRUE(mods.count("A") > 0);
+    EXPECT_TRUE(mods.count("S") > 0);
+    EXPECT_TRUE(mods.count("CTRL") > 0);
+}
+
+TEST_F(MappingEngineTest, PrefersMoreSpecificMapping) {
+    const fs::path config_path = WriteConfig(R"(
+[modifiers]
+a
+s
+d
+
+[maps]
+[*] [a s d] [j] [Most Specific]
+[*] [a s] [j] [Less Specific]
+[*] [a] [j] [Even Less Specific]
+[*] [] [j] [No Modifiers]
+)");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine engine(loader);
+    engine.Initialize();
+
+    // With all three modifiers, should get most specific
+    std::set<std::string> all_mods = {"A", "S", "D"};
+    auto result = engine.ResolveMapping("j", "", all_mods);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ("MOST SPECIFIC", result->action);
+
+    // With two modifiers, should get less specific
+    std::set<std::string> two_mods = {"A", "S"};
+    result = engine.ResolveMapping("j", "", two_mods);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ("LESS SPECIFIC", result->action);
+
+    // With one modifier, should get even less specific
+    std::set<std::string> one_mod = {"A"};
+    result = engine.ResolveMapping("j", "", one_mod);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ("EVEN LESS SPECIFIC", result->action);
+
+    // With no modifiers, should get the base mapping
+    std::set<std::string> no_mods;
+    result = engine.ResolveMapping("j", "", no_mods);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ("NO MODIFIERS", result->action);
+}
+
+TEST_F(MappingEngineTest, EnumerateMappingsIncludesModifiers) {
+    const fs::path config_path = WriteConfig(R"(
+[modifiers]
+a
+
+[maps]
+[*] [a] [j] [ShiftEnd]
+[*] [] [j] [Down]
+)");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine engine(loader);
+    engine.Initialize();
+
+    const auto entries = engine.EnumerateMappings();
+    EXPECT_EQ(2u, entries.size());
+    
+    // Check that entries with modifiers come first (more specific)
+    EXPECT_EQ("J", entries[0].source);
+    EXPECT_EQ(1u, entries[0].required_mods.size());
+    EXPECT_EQ("A", entries[0].required_mods[0]);
 }

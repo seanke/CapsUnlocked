@@ -74,3 +74,187 @@ TEST_F(LayerControllerTest, DispatchesMappedActionsWhileLayerActive) {
     EXPECT_FALSE(controller.IsLayerActive());
     EXPECT_FALSE(controller.OnKeyEvent({"H", "", true}));
 }
+
+// New tests for modifier support
+
+TEST_F(LayerControllerTest, TracksModifierKeyState) {
+    const fs::path config_path = WriteConfig(R"(
+[modifiers]
+a
+s
+
+[maps]
+[*] [j] [Down]
+)");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine mapping(loader);
+    mapping.Initialize();
+
+    caps::core::LayerController controller(mapping);
+    controller.OnCapsLockPressed();
+
+    // Initially no modifiers
+    EXPECT_TRUE(controller.GetActiveModifiers().empty());
+
+    // Press modifier 'a'
+    EXPECT_TRUE(controller.OnKeyEvent({"a", "", true}));
+    EXPECT_EQ(1u, controller.GetActiveModifiers().size());
+    EXPECT_TRUE(controller.GetActiveModifiers().count("A") > 0);
+
+    // Press modifier 's'
+    EXPECT_TRUE(controller.OnKeyEvent({"s", "", true}));
+    EXPECT_EQ(2u, controller.GetActiveModifiers().size());
+    EXPECT_TRUE(controller.GetActiveModifiers().count("S") > 0);
+
+    // Release modifier 'a'
+    EXPECT_TRUE(controller.OnKeyEvent({"a", "", false}));
+    EXPECT_EQ(1u, controller.GetActiveModifiers().size());
+    EXPECT_FALSE(controller.GetActiveModifiers().count("A") > 0);
+
+    // CapsLock release clears modifiers
+    controller.OnCapsLockReleased();
+    EXPECT_TRUE(controller.GetActiveModifiers().empty());
+}
+
+TEST_F(LayerControllerTest, ModifiersAreSwallowed) {
+    const fs::path config_path = WriteConfig(R"(
+[modifiers]
+a
+
+[maps]
+[*] [j] [Down]
+)");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine mapping(loader);
+    mapping.Initialize();
+
+    caps::core::LayerController controller(mapping);
+
+    std::vector<std::pair<std::string, bool>> emitted;
+    controller.SetActionCallback(
+        [&emitted](const std::string& action, bool pressed) { emitted.emplace_back(action, pressed); });
+
+    controller.OnCapsLockPressed();
+
+    // Modifier key press should be swallowed (return true) but not emit action
+    EXPECT_TRUE(controller.OnKeyEvent({"a", "", true}));
+    EXPECT_TRUE(emitted.empty());
+
+    // Modifier key release should also be swallowed
+    EXPECT_TRUE(controller.OnKeyEvent({"a", "", false}));
+    EXPECT_TRUE(emitted.empty());
+}
+
+TEST_F(LayerControllerTest, MappingActivatesWithModifiers) {
+    const fs::path config_path = WriteConfig(R"(
+[modifiers]
+a
+s
+
+[maps]
+[*] [a s] [j] [Shift End]
+[*] [] [j] [Down]
+)");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine mapping(loader);
+    mapping.Initialize();
+
+    caps::core::LayerController controller(mapping);
+
+    std::vector<std::pair<std::string, bool>> emitted;
+    controller.SetActionCallback(
+        [&emitted](const std::string& action, bool pressed) { emitted.emplace_back(action, pressed); });
+
+    controller.OnCapsLockPressed();
+
+    // Without modifiers, 'j' should trigger Down
+    EXPECT_TRUE(controller.OnKeyEvent({"j", "", true}));
+    ASSERT_EQ(1u, emitted.size());
+    EXPECT_EQ("DOWN", emitted[0].first);
+    emitted.clear();
+
+    // Press both modifiers
+    controller.OnKeyEvent({"a", "", true});
+    controller.OnKeyEvent({"s", "", true});
+
+    // Now 'j' should trigger Shift End
+    EXPECT_TRUE(controller.OnKeyEvent({"j", "", true}));
+    ASSERT_EQ(1u, emitted.size());
+    EXPECT_EQ("SHIFT END", emitted[0].first);
+    emitted.clear();
+
+    // Release one modifier
+    controller.OnKeyEvent({"a", "", false});
+
+    // Now 'j' should fall back to Down
+    EXPECT_TRUE(controller.OnKeyEvent({"j", "", true}));
+    ASSERT_EQ(1u, emitted.size());
+    EXPECT_EQ("DOWN", emitted[0].first);
+}
+
+TEST_F(LayerControllerTest, MultipleModifierCombinations) {
+    const fs::path config_path = WriteConfig(R"(
+[modifiers]
+a
+s
+d
+
+[maps]
+[*] [a s d] [j] [Three Mods]
+[*] [a s] [j] [Two Mods]
+[*] [a] [j] [One Mod]
+[*] [] [j] [No Mods]
+)");
+
+    caps::core::ConfigLoader loader;
+    loader.Load(config_path.string());
+
+    caps::core::MappingEngine mapping(loader);
+    mapping.Initialize();
+
+    caps::core::LayerController controller(mapping);
+
+    std::vector<std::pair<std::string, bool>> emitted;
+    controller.SetActionCallback(
+        [&emitted](const std::string& action, bool pressed) { emitted.emplace_back(action, pressed); });
+
+    controller.OnCapsLockPressed();
+
+    // Test with all three modifiers
+    controller.OnKeyEvent({"a", "", true});
+    controller.OnKeyEvent({"s", "", true});
+    controller.OnKeyEvent({"d", "", true});
+    controller.OnKeyEvent({"j", "", true});
+    ASSERT_EQ(1u, emitted.size());
+    EXPECT_EQ("THREE MODS", emitted[0].first);
+    emitted.clear();
+
+    // Release d, should fall back to two mods
+    controller.OnKeyEvent({"d", "", false});
+    controller.OnKeyEvent({"j", "", true});
+    ASSERT_EQ(1u, emitted.size());
+    EXPECT_EQ("TWO MODS", emitted[0].first);
+    emitted.clear();
+
+    // Release s, should fall back to one mod
+    controller.OnKeyEvent({"s", "", false});
+    controller.OnKeyEvent({"j", "", true});
+    ASSERT_EQ(1u, emitted.size());
+    EXPECT_EQ("ONE MOD", emitted[0].first);
+    emitted.clear();
+
+    // Release a, should fall back to no mods
+    controller.OnKeyEvent({"a", "", false});
+    controller.OnKeyEvent({"j", "", true});
+    ASSERT_EQ(1u, emitted.size());
+    EXPECT_EQ("NO MODS", emitted[0].first);
+}

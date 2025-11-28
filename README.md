@@ -6,6 +6,7 @@ A small keyboard layer tool that turns `CapsLock` into a momentary modifier. Whi
 - Hold `CapsLock` to activate the layer
 - Remap keys via `capsunlocked.ini` next to the executable
 - Default mapping: `h=Left`, `j=Down`, `k=Up`, `l=Right`
+- **Layer Modifiers**: Define custom modifier keys that, when held along with CapsLock, activate alternative mappings
 - Uses a low-level keyboard hook and `SendInput`
 
 ## Build
@@ -35,20 +36,68 @@ On first run CapsUnlocked writes a default `capsunlocked.ini` next to the execut
 ## Config
 Config file path: `./capsunlocked.ini` (same folder as the executable)
 
-Format:
+### Basic Format (Legacy)
+Simple whitespace-delimited format for basic mappings:
+```ini
+# app  source  target
+*      h       Left
+*      j       Down
+*      k       Up
+*      l       Right
 ```
-# Lines like source=target
-# Supported tokens: single characters (e.g. h, a) and common names (Left, Right, Up, Down, Enter, Esc, Tab, Space, Backspace, Delete, Home, End, PageUp, PageDown), or hex key codes (virtual-key on Windows, CGKeyCode on macOS) like 0x25
 
-h=Left
-j=Down
-k=Up
-l=Right
+### Extended Format with Modifiers
+For advanced layer control, you can define modifier keys and create conditional mappings:
+
+```ini
+[modifiers]
+a
+s
+
+[maps]
+# When both 'a' and 's' are held with CapsLock, pressing 'j' sends Shift+End
+[*] [a s] [j] [Shift End]
+
+# When neither 'a' nor 's' are held, pressing 'j' sends Down
+[*] [] [j] [Down]
+
+# Regular mapping without modifiers
+[*] [h] [Left]
 ```
+
+### Modifiers Section
+- **`[modifiers]`**: Optional section listing keys that act as layer modifiers
+- Each line contains a single key name (e.g., `a`, `s`, `Shift`, `Ctrl`)
+- Modifier keys are reserved and cannot be used as source or target keys in mappings
+- When you press a modifier key while the layer is active, it's swallowed (not sent through)
+- Modifiers use logical AND: all listed modifiers must be held for a mapping to activate
+
+### Mapping Syntax
+- **Legacy format**: `app source target` (whitespace-delimited)
+- **Bracket format**: `[app] [source] [target]` (no modifiers)
+- **With modifiers**: `[app] [mods] [source] [target]`
+  - `mods` is a space-separated list of modifiers that must be held
+  - Use `[]` for an empty modifier list (fallback mapping)
+
+### Mapping Priority
+When multiple mappings exist for the same source key, the most specific one (with the most matching modifiers) takes priority.
+
+### Supported Tokens
+- Single characters: `h`, `a`, `j`
+- Common key names: `Left`, `Right`, `Up`, `Down`, `Enter`, `Esc`, `Tab`, `Space`, `Backspace`, `Delete`, `Home`, `End`, `PageUp`, `PageDown`, `Shift`, `Ctrl`, `Alt`
+- Hex key codes: `0x25` (virtual-key on Windows, CGKeyCode on macOS)
+
+### Validation Rules
+When a `[modifiers]` section is present:
+1. Keys declared as modifiers cannot be used as source keys in mappings
+2. Keys declared as modifiers cannot be used as target keys in mappings
+3. Modifiers used in mapping modifier lists must be defined in the `[modifiers]` section
+
+If no `[modifiers]` section exists, the config file behaves as before (backwards compatible).
 
 ## Notes
 - CapsLock is swallowed and used purely as a momentary modifier; tapping it does not toggle caps state.
-- If you want CapsLock to remain off, ensure it’s off before launching (or modify the code to force it off at startup).
+- If you want CapsLock to remain off, ensure it's off before launching (or modify the code to force it off at startup).
 - On macOS the app stays attached to your terminal session; press `Ctrl+C` to exit.
 
 ## License
