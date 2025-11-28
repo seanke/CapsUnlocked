@@ -54,7 +54,8 @@ std::optional<MappingEngine::ResolvedMapping> MappingEngine::ResolveMapping(
                 continue;
             }
             
-            // Prefer mappings with more modifiers (more specific)
+            // Prefer mappings with more modifiers (more specific).
+            // When counts are equal, keep the first match found (config file order determines priority).
             if (best == nullptr || def.required_mods.size() > best_mod_count) {
                 best = &def;
                 best_mod_count = def.required_mods.size();

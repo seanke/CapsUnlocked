@@ -78,8 +78,8 @@ struct ParsedMapping {
 ParsedMapping ParseMappingLine(const std::string& line, size_t line_number) {
     ParsedMapping result;
     
-    // Match bracket groups: [content]
-    std::regex bracket_regex(R"(\[([^\]]*)\])");
+    // Match bracket groups: [content] - static regex to avoid recompilation overhead
+    static const std::regex bracket_regex(R"(\[([^\]]*)\])");
     std::vector<std::string> groups;
     
     auto begin = std::sregex_iterator(line.begin(), line.end(), bracket_regex);
