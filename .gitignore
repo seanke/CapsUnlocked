@@ -17,6 +17,7 @@ cmake-build-*/
 /Release/
 /x64/
 /x86/
+/_codeql_build_dir/
 
 # Visual Studio
 .vs/
