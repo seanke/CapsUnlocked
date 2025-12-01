@@ -8,6 +8,8 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <vector>
+#include <algorithm>
 
 #include "core/logging.h"
 #include "platform/macos/event_tag.h"
@@ -52,16 +54,20 @@ std::optional<CGKeyCode> LookupLetter(char letter) {
 // Handles named keys such as arrow/home/end plus single characters.
 std::optional<CGKeyCode> LookupNamedKey(const std::string& token) {
     static const std::unordered_map<std::string, CGKeyCode> kNamedKeys = {
-        {"LEFT", kVK_LeftArrow},     {"RIGHT", kVK_RightArrow}, {"UP", kVK_UpArrow},
-        {"DOWN", kVK_DownArrow},     {"ESC", kVK_Escape},       {"ESCAPE", kVK_Escape},
-        {"ENTER", kVK_Return},       {"RETURN", kVK_Return},    {"TAB", kVK_Tab},
-        {"SPACE", kVK_Space},        {"BACKSPACE", kVK_Delete}, {"DELETE", kVK_ForwardDelete},
-        {"HOME", kVK_Home},          {"END", kVK_End},          {"PAGEUP", kVK_PageUp},
-        {"PAGEDOWN", kVK_PageDown},  {"F1", kVK_F1},            {"F2", kVK_F2},
-        {"F3", kVK_F3},              {"F4", kVK_F4},            {"F5", kVK_F5},
-        {"F6", kVK_F6},              {"F7", kVK_F7},            {"F8", kVK_F8},
-        {"F9", kVK_F9},              {"F10", kVK_F10},          {"F11", kVK_F11},
-        {"F12", kVK_F12},
+        {"LEFT", kVK_LeftArrow},       {"RIGHT", kVK_RightArrow},   {"UP", kVK_UpArrow},
+        {"DOWN", kVK_DownArrow},       {"ESC", kVK_Escape},         {"ESCAPE", kVK_Escape},
+        {"ENTER", kVK_Return},         {"RETURN", kVK_Return},      {"TAB", kVK_Tab},
+        {"SPACE", kVK_Space},          {"BACKSPACE", kVK_Delete},   {"DELETE", kVK_ForwardDelete},
+        {"HOME", kVK_Home},            {"END", kVK_End},            {"PAGEUP", kVK_PageUp},
+        {"PAGEDOWN", kVK_PageDown},    {"SHIFT", kVK_Shift},        {"LSHIFT", kVK_Shift},
+        {"RSHIFT", kVK_RightShift},    {"CTRL", kVK_Control},       {"CONTROL", kVK_Control},
+        {"ALT", kVK_Option},           {"OPTION", kVK_Option},      {"CMD", kVK_Command},
+        {"COMMAND", kVK_Command},      {"LCMD", kVK_Command},       {"RCMD", kVK_RightCommand},
+        {"META", kVK_Command},         {"SUPER", kVK_Command},      {"F1", kVK_F1},
+        {"F2", kVK_F2},                {"F3", kVK_F3},              {"F4", kVK_F4},
+        {"F5", kVK_F5},                {"F6", kVK_F6},              {"F7", kVK_F7},
+        {"F8", kVK_F8},                {"F9", kVK_F9},              {"F10", kVK_F10},
+        {"F11", kVK_F11},              {"F12", kVK_F12},
     };
 
     if (token.size() == 1 && std::isalpha(static_cast<unsigned char>(token.front()))) {
@@ -91,26 +97,132 @@ std::optional<CGKeyCode> LookupKeyCode(const std::string& action) {
     return LookupNamedKey(normalized);
 }
 
-} // namespace
+struct ActionToken {
+    std::string key;
+    bool hold{false};
+};
 
-// Emits a synthetic key press/release corresponding to the mapped action string.
-void Output::Emit(const std::string& action, bool pressed) {
-    const auto key_code = LookupKeyCode(action);
-    if (!key_code) {
-        core::logging::Warn("[macOS::Output] Unknown action '" + action + "'");
-        return;
+std::vector<ActionToken> SplitTokens(const std::string& action) {
+    std::istringstream stream(action);
+    std::vector<ActionToken> tokens;
+    std::string token;
+    while (stream >> token) {
+        ActionToken parsed;
+        parsed.hold = !token.empty() && token.back() == '!';
+        if (parsed.hold) {
+            token.pop_back();
+        }
+        parsed.key = token;
+        tokens.push_back(std::move(parsed));
     }
+    return tokens;
+}
 
-    CGEventRef event = CGEventCreateKeyboardEvent(nullptr, *key_code, pressed);
+CGEventFlags FlagsForHeld(const std::vector<CGKeyCode>& held) {
+    CGEventFlags flags = 0;
+    for (CGKeyCode code : held) {
+        switch (code) {
+            case kVK_Shift:
+            case kVK_RightShift:
+                flags |= kCGEventFlagMaskShift;
+                break;
+            case kVK_Control:
+                flags |= kCGEventFlagMaskControl;
+                break;
+            case kVK_Option:
+                flags |= kCGEventFlagMaskAlternate;
+                break;
+            case kVK_Command:
+            case kVK_RightCommand:
+                flags |= kCGEventFlagMaskCommand;
+                break;
+            default:
+                break;
+        }
+    }
+    return flags;
+}
+
+void EmitSingle(CGKeyCode key_code, bool pressed, CGEventFlags flags) {
+    CGEventRef event = CGEventCreateKeyboardEvent(nullptr, key_code, pressed);
     if (!event) {
-        core::logging::Error("[macOS::Output] Failed to create CGEvent for " + action);
+        core::logging::Error("[macOS::Output] Failed to create CGEvent");
         return;
     }
 
+    CGEventSetFlags(event, flags);
     CGEventSetIntegerValueField(event, kCGEventSourceUserData, kSyntheticEventTag);
     // Fire the event at the HID tap so it behaves like real hardware input.
     CGEventPost(kCGHIDEventTap, event);
     CFRelease(event);
+}
+
+} // namespace
+
+// Emits a synthetic key press/release corresponding to the mapped action string.
+void Output::Emit(const std::string& action, bool pressed) {
+    const auto tokens = SplitTokens(action);
+    if (tokens.empty()) {
+        core::logging::Warn("[macOS::Output] Empty action");
+        return;
+    }
+
+    std::vector<std::pair<CGKeyCode, bool>> sequence;
+    sequence.reserve(tokens.size() * 2);
+
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        const auto& tok = tokens[i];
+        const auto key_code = LookupKeyCode(tok.key);
+        if (!key_code) {
+            core::logging::Warn("[macOS::Output] Unknown action token '" + tok.key + "' in '" + action + "'");
+            return;
+        }
+
+        if (tok.hold) {
+            if (i + 1 >= tokens.size()) {
+                core::logging::Warn("[macOS::Output] Hold token '" + tok.key + "!' has no following key in '" + action + "'");
+                return;
+            }
+            const auto next_code = LookupKeyCode(tokens[i + 1].key);
+            if (!next_code) {
+                core::logging::Warn("[macOS::Output] Unknown action token '" + tokens[i + 1].key + "' in '" + action + "'");
+                return;
+            }
+            sequence.emplace_back(*key_code, true);   // hold down
+            sequence.emplace_back(*next_code, true);  // tap target
+            sequence.emplace_back(*next_code, false); // release target
+            sequence.emplace_back(*key_code, false);  // release hold
+            ++i; // skip the next token since it's consumed
+        } else {
+            sequence.emplace_back(*key_code, true);
+            sequence.emplace_back(*key_code, false);
+        }
+    }
+
+    if (pressed) {
+        CGEventFlags current_flags = 0;
+        std::vector<CGKeyCode> active_mods;
+
+        for (size_t idx = 0; idx < sequence.size(); ++idx) {
+            const auto [code, down] = sequence[idx];
+            if (down && (code == kVK_Shift || code == kVK_RightShift || code == kVK_Control ||
+                         code == kVK_Option || code == kVK_Command || code == kVK_RightCommand)) {
+                active_mods.push_back(code);
+                current_flags = FlagsForHeld(active_mods);
+            } else if (!down && !active_mods.empty()) {
+                active_mods.erase(std::remove(active_mods.begin(), active_mods.end(), code), active_mods.end());
+                current_flags = FlagsForHeld(active_mods);
+            }
+
+            std::ostringstream msg;
+            msg << "[macOS::Output] Emit " << (down ? "down" : "up")
+                << " code=" << code << " flags=0x" << std::hex << current_flags;
+            core::logging::Debug(msg.str());
+
+            EmitSingle(code, down, current_flags);
+        }
+    }
+    // Macro completes on press; releases are ignored for synthetic sequences.
 }
 
 } // namespace caps::platform::macos

@@ -1,11 +1,13 @@
 # CapsUnlocked (Windows 11 & macOS)
 
-A small keyboard layer tool that turns `CapsLock` into a momentary modifier. While held, selected keys are remapped based on a config file. By default, `h j k l` become the arrow keys. On Windows it lives in the system tray with a right-click Exit menu; on macOS it runs as a background console app.
+A small keyboard layer tool that turns `CapsLock` into a momentary modifier. While held, selected keys are remapped based on a config file. By default, `j k i l` become the arrow keys (`j` left, `l` right, `i` up, `k` down) and holding `a` adds navigation combos (`a+j` = Home, `a+k` = PageDown, `a+i` = PageUp, `a+l` = End). On Windows it lives in the system tray with a right-click Exit menu; on macOS it runs as a background console app.
 
 ## Features
 - Hold `CapsLock` to activate the layer
 - Remap keys via `capsunlocked.ini` next to the executable
-- Default mapping: `h=Left`, `j=Down`, `k=Up`, `l=Right`
+- Default mapping: `j=Left`, `k=Down`, `i=Up`, `l=Right`
+- Default modifier combos: hold `d` for `j=Home`, `k=PageDown`, `i=PageUp`, `l=End`; hold `s` for Shift+arrows
+- **Layer Modifiers**: Define custom modifier keys that, when held along with CapsLock, activate alternative mappings
 - Uses a low-level keyboard hook and `SendInput`
 
 ## Build
@@ -35,20 +37,66 @@ On first run CapsUnlocked writes a default `capsunlocked.ini` next to the execut
 ## Config
 Config file path: `./capsunlocked.ini` (same folder as the executable)
 
-Format:
-```
-# Lines like source=target
-# Supported tokens: single characters (e.g. h, a) and common names (Left, Right, Up, Down, Enter, Esc, Tab, Space, Backspace, Delete, Home, End, PageUp, PageDown), or hex key codes (virtual-key on Windows, CGKeyCode on macOS) like 0x25
+### Basic Config (matches the default)
+Defaults with two modifiers (`d` for navigation, `s` for shifted navigation):
+```ini
+[modifiers]
+s
+d
 
-h=Left
-j=Down
-k=Up
-l=Right
+[maps]
+[*] [j] [Left]
+[*] [k] [Down]
+[*] [i] [Up]
+[*] [l] [Right]
+
+[*] [d j] [Home]
+[*] [d k] [PageDown]
+[*] [d i] [PageUp]
+[*] [d l] [End]
+
+[*] [s j] [Shift! Left]
+[*] [s k] [Shift! Down]
+[*] [s i] [Shift! Up]
+[*] [s l] [Shift! Right]
+
+# Platform-specific example
+[mac *] [c] [Command V]
+[win *] [c] [Control V]
 ```
+
+### Mapping Syntax
+- **Bracket format**: `[app] [source] [target]` (no modifiers)
+- **With modifiers**: `[app] [mods source] [target]` (mods first, source last)
+  - Example: `[*] [s j] [Shift! Left]` sends Shift+Left when `s` is held with CapsLock
+- **Platform filter**: prefix the app bracket with `mac` or `win` (e.g., `[mac *] [...]`)
+
+### Modifiers Section
+- **`[modifiers]`**: Optional section listing keys that act as layer modifiers
+- Each line contains a single key name (e.g., `a`, `s`, `Shift`, `Ctrl`)
+- Modifier keys are reserved and cannot be used as source or target keys in mappings
+- When you press a modifier key while the layer is active, it's swallowed (not sent through)
+- Modifiers use logical AND: all listed modifiers must be held for a mapping to activate
+
+### Mapping Priority
+When multiple mappings exist for the same source key, the most specific one (with the most matching modifiers) takes priority.
+
+### Supported Tokens
+- Single characters: `h`, `a`, `j`
+- Common key names: `Left`, `Right`, `Up`, `Down`, `Enter`, `Esc`, `Tab`, `Space`, `Backspace`, `Delete`, `Home`, `End`, `PageUp`, `PageDown`, `Shift`, `Ctrl`, `Alt`
+- Hex key codes: `0x25` (virtual-key on Windows, CGKeyCode on macOS)
+
+### Validation Rules
+When a `[modifiers]` section is present:
+1. Keys declared as modifiers cannot be used as source keys in mappings
+2. Keys declared as modifiers cannot be used as target keys in mappings
+3. Modifiers used in mapping modifier lists must be defined in the `[modifiers]` section
+
+If no `[modifiers]` section exists, mappings apply without modifier constraints.
 
 ## Notes
 - CapsLock is swallowed and used purely as a momentary modifier; tapping it does not toggle caps state.
-- If you want CapsLock to remain off, ensure it’s off before launching (or modify the code to force it off at startup).
+- If you want CapsLock to remain off, ensure it's off before launching (or modify the code to force it off at startup).
 - On macOS the app stays attached to your terminal session; press `Ctrl+C` to exit.
 
 ## License

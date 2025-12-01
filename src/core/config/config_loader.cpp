@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 
@@ -21,15 +22,174 @@ bool IsComment(const std::string& line) {
     return false;
 }
 
+// Section type enumeration for INI parsing
+enum class SectionType { None, Maps, Modifiers };
+
+// Parse a section header like [modifiers] or [maps]
+// Returns the section type if recognized, or None if unrecognized
+SectionType ParseSectionHeader(const std::string& line) {
+    std::string trimmed = ConfigLoader::Trim(line);
+    if (trimmed.empty() || trimmed.front() != '[' || trimmed.back() != ']') {
+        return SectionType::None;
+    }
+    
+    std::string section_name = trimmed.substr(1, trimmed.size() - 2);
+    // Normalize to lowercase for comparison
+    std::transform(section_name.begin(), section_name.end(), section_name.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    
+    if (section_name == "modifiers") {
+        return SectionType::Modifiers;
+    }
+    if (section_name == "maps") {
+        return SectionType::Maps;
+    }
+    return SectionType::None;
+}
+
+// Check if a line is a section header (single bracket group only, e.g. [modifiers] or [maps])
+bool IsSectionHeader(const std::string& line) {
+    std::string trimmed = ConfigLoader::Trim(line);
+    if (trimmed.empty() || trimmed.front() != '[') {
+        return false;
+    }
+    // Find the first closing bracket
+    size_t close = trimmed.find(']');
+    if (close == std::string::npos) {
+        return false;
+    }
+    // Section header: nothing after the first closing bracket (except whitespace)
+    std::string after = ConfigLoader::Trim(trimmed.substr(close + 1));
+    return after.empty();
+}
+
+// Parse bracket-delimited tokens from a mapping line
+// Format: [app] [mods+source] [target] or [app] [source] [target]
+// The first bracket may optionally include an OS filter token ("mac" or "win")
+// followed by the app name (or "*"). The second bracket contains the source key,
+// optionally preceded by modifiers (mods first).
+struct ParsedMapping {
+    std::string app;
+    std::vector<std::string> modifiers;
+    std::string source;
+    std::string target;
+    bool valid{false};
+    std::string error;
+    bool skip{false}; // true when OS filter does not match current platform
+};
+
+std::string ToUpperNoSpace(const std::string& value) {
+    std::string out;
+    out.reserve(value.size());
+    for (char ch : value) {
+        if (std::isspace(static_cast<unsigned char>(ch))) {
+            continue;
+        }
+        out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+    }
+    return out;
+}
+
+bool MatchesCurrentPlatform(const std::string& os_token) {
+    const std::string upper = ToUpperNoSpace(os_token);
+    if (upper == "MAC" || upper == "MACOS") {
+#if defined(__APPLE__)
+        return true;
+#else
+        return false;
+#endif
+    }
+    if (upper == "WIN" || upper == "WINDOWS" || upper == "WIN32" || upper == "WIN64") {
+#if defined(_WIN32)
+        return true;
+#else
+        return false;
+#endif
+    }
+    return false;
+}
+
+ParsedMapping ParseMappingLine(const std::string& line, size_t line_number) {
+    ParsedMapping result;
+    
+    // Match bracket groups: [content] - static regex to avoid recompilation overhead
+    static const std::regex bracket_regex(R"(\[([^\]]*)\])");
+    std::vector<std::string> groups;
+    
+    auto begin = std::sregex_iterator(line.begin(), line.end(), bracket_regex);
+    auto end = std::sregex_iterator();
+    
+    for (auto it = begin; it != end; ++it) {
+        groups.push_back((*it)[1].str());
+    }
+    
+    if (groups.size() == 3) {
+        // Format: [app] [mods? source] [target]
+        std::istringstream app_stream(ConfigLoader::Trim(groups[0]));
+        std::vector<std::string> app_tokens;
+        std::string app_token;
+        while (app_stream >> app_token) {
+            app_tokens.push_back(app_token);
+        }
+        if (app_tokens.empty()) {
+            result.error = "Invalid config line " + std::to_string(line_number) + ": empty app token";
+            return result;
+        }
+
+        size_t app_index = 0;
+        if (app_tokens.size() >= 2 && MatchesCurrentPlatform(app_tokens[0])) {
+            app_index = 1; // skip platform token
+        } else if (app_tokens.size() >= 2 && (ToUpperNoSpace(app_tokens[0]) == "MAC" || ToUpperNoSpace(app_tokens[0]) == "MACOS" ||
+                                              ToUpperNoSpace(app_tokens[0]) == "WIN" || ToUpperNoSpace(app_tokens[0]) == "WINDOWS" ||
+                                              ToUpperNoSpace(app_tokens[0]) == "WIN32" || ToUpperNoSpace(app_tokens[0]) == "WIN64")) {
+            result.skip = true; // OS token present but not matching current platform
+            result.valid = true;
+            return result;
+        }
+
+        std::string app_raw;
+        for (; app_index < app_tokens.size(); ++app_index) {
+            app_raw += app_tokens[app_index];
+        }
+        result.app = ConfigLoader::NormalizeAppToken(app_raw);
+
+        std::istringstream src_stream(ConfigLoader::Trim(groups[1]));
+        std::string token;
+        while (src_stream >> token) {
+            result.modifiers.push_back(ConfigLoader::NormalizeKeyToken(token));
+        }
+        if (result.modifiers.empty()) {
+            result.error = "Invalid config line " + std::to_string(line_number) +
+                           ": missing source key in second bracket";
+            return result;
+        }
+        result.source = std::move(result.modifiers.back());
+        result.modifiers.pop_back(); // remaining tokens are modifiers
+
+        result.target = ConfigLoader::NormalizeKeyToken(ConfigLoader::Trim(groups[2]));
+        result.valid = true;
+    } else {
+        result.error = "Invalid config line " + std::to_string(line_number) +
+                      ": expected '[app] [source] [target]' or '[app] [mods source] [target]'";
+    }
+    
+    return result;
+}
+
 } // namespace
 
 ConfigLoader::ConfigLoader()
-    : mappings_(BuildDefaultMappings()) {}
+    : mappings_(BuildDefaultMappings()),
+      modifiers_(BuildDefaultModifiers()),
+      has_modifiers_section_(true) {}
 
 // Reads the config at `path`, remembering it so Reload() can reuse the same source.
 void ConfigLoader::Load(const std::string& path) {
     config_path_ = path;
-    mappings_ = ParseConfigFile(path);
+    auto result = ParseConfigFile(path);
+    mappings_ = std::move(result.mappings);
+    modifiers_ = std::move(result.modifiers);
+    has_modifiers_section_ = result.has_modifiers_section;
 }
 
 // Convenience helper for hot-reloads; uses the last path passed into Load().
@@ -38,39 +198,80 @@ void ConfigLoader::Reload() {
         throw std::runtime_error("ConfigLoader::Reload called before Load");
     }
 
-    mappings_ = ParseConfigFile(config_path_);
+    auto result = ParseConfigFile(config_path_);
+    mappings_ = std::move(result.mappings);
+    modifiers_ = std::move(result.modifiers);
+    has_modifiers_section_ = result.has_modifiers_section;
 }
 
 const ConfigLoader::MappingTable& ConfigLoader::Mappings() const {
     return mappings_;
 }
 
+const ConfigLoader::ModifierSet& ConfigLoader::Modifiers() const {
+    return modifiers_;
+}
+
+bool ConfigLoader::HasModifiersSection() const {
+    return has_modifiers_section_;
+}
+
 // Produces a quick human-readable summary that is handy for logging and debugging.
 std::string ConfigLoader::Describe() const {
     std::ostringstream output;
     size_t count = 0;
-    for (const auto& [app, table] : mappings_) {
-        count += table.size();
+    for (const auto& [app, definitions] : mappings_) {
+        count += definitions.size();
     }
-    output << "Config (" << count << " entries)";
-    for (const auto& [app, table] : mappings_) {
-        for (const auto& [source, target] : table) {
-            output << "\n[" << app << "] " << source << " -> " << target;
+    output << "Config (" << count << " entries";
+    if (has_modifiers_section_) {
+        output << ", " << modifiers_.size() << " modifiers";
+    }
+    output << ")";
+    
+    if (has_modifiers_section_ && !modifiers_.empty()) {
+        output << "\nModifiers: ";
+        bool first = true;
+        for (const auto& mod : modifiers_) {
+            if (!first) output << ", ";
+            output << mod;
+            first = false;
+        }
+    }
+    
+    for (const auto& [app, definitions] : mappings_) {
+        for (const auto& def : definitions) {
+            output << "\n[" << app << "] ";
+            if (!def.required_mods.empty()) {
+                output << "[";
+                for (size_t i = 0; i < def.required_mods.size(); ++i) {
+                    if (i > 0) output << " ";
+                    output << def.required_mods[i];
+                }
+                output << "] ";
+            }
+            output << def.source << " -> " << def.target;
         }
     }
     return output.str();
 }
 
-// Opens the ini file, parses whitespace-delimited `key value` rows, and returns a normalized map.
-ConfigLoader::MappingTable ConfigLoader::ParseConfigFile(const std::string& path) const {
+// Opens the ini file, parses sections and mapping lines.
+ConfigLoader::ParseResult ConfigLoader::ParseConfigFile(const std::string& path) const {
     std::ifstream stream(path);
     if (!stream.is_open()) {
-        return BuildDefaultMappings();
+        ParseResult result;
+        result.mappings = BuildDefaultMappings();
+        result.modifiers = BuildDefaultModifiers();
+        result.has_modifiers_section = true;
+        return result;
     }
 
-    MappingTable parsed;
+    ParseResult result;
     std::string line;
     size_t line_number = 0;
+    SectionType current_section = SectionType::None;
+    
     while (std::getline(stream, line)) {
         ++line_number;
         const std::string trimmed = Trim(line);
@@ -78,40 +279,107 @@ ConfigLoader::MappingTable ConfigLoader::ParseConfigFile(const std::string& path
             continue;
         }
 
-        if (trimmed.find('=') != std::string::npos) {
-            throw std::runtime_error("Invalid config line " + std::to_string(line_number) +
-                                     ": '=' separators are not supported; use whitespace");
+        // Check for section header
+        if (IsSectionHeader(trimmed)) {
+            SectionType new_section = ParseSectionHeader(trimmed);
+            if (new_section != SectionType::None) {
+                current_section = new_section;
+                if (current_section == SectionType::Modifiers) {
+                    result.has_modifiers_section = true;
+                }
+            }
+            // Ignore unrecognized sections
+            continue;
         }
 
-        std::istringstream line_stream(trimmed);
-        std::string app_token;
-        std::string key_token;
-        std::string action_token;
-        if (!(line_stream >> app_token >> key_token >> action_token)) {
-            throw std::runtime_error("Invalid config line " + std::to_string(line_number) +
-                                     ": expected 'app key action'");
+        // Process line based on current section
+        if (current_section == SectionType::Modifiers) {
+            // Each line in [modifiers] is a single key name
+            std::string mod_key = NormalizeKeyToken(trimmed);
+            result.modifiers.insert(mod_key);
+        } else {
+            // Default section or [maps] section: parse mapping lines
+            auto parsed = ParseMappingLine(trimmed, line_number);
+            if (!parsed.valid) {
+                throw std::runtime_error(parsed.error);
+            }
+            if (parsed.skip) {
+                continue; // OS-filtered mapping not for this platform
+            }
+            
+            // Validation: if modifiers section exists, check constraints
+            if (result.has_modifiers_section) {
+                // Check that source key is not a modifier (unless it's in the modifier list)
+                if (result.modifiers.count(parsed.source) > 0) {
+                    throw std::runtime_error("Invalid config line " + std::to_string(line_number) +
+                                           ": source key '" + parsed.source + 
+                                           "' is declared as a modifier and cannot be used as a source key");
+                }
+                
+                // Check that target key is not a modifier
+                // Note: target could be space-separated for multi-key output
+                std::istringstream target_stream(parsed.target);
+                std::string target_key;
+                while (target_stream >> target_key) {
+                    if (result.modifiers.count(target_key) > 0) {
+                        throw std::runtime_error("Invalid config line " + std::to_string(line_number) +
+                                               ": target key '" + target_key + 
+                                               "' is declared as a modifier and cannot be used as a target key");
+                    }
+                }
+                
+                // Check that all modifiers in the mapping are defined
+                for (const auto& mod : parsed.modifiers) {
+                    if (result.modifiers.count(mod) == 0) {
+                        throw std::runtime_error("Invalid config line " + std::to_string(line_number) +
+                                               ": modifier '" + mod + 
+                                               "' used in mapping but not declared in [modifiers] section");
+                    }
+                }
+            }
+            
+            MappingDefinition def;
+            def.source = parsed.source;
+            def.target = parsed.target;
+            def.required_mods = std::move(parsed.modifiers);
+            
+            result.mappings[parsed.app].push_back(std::move(def));
         }
-
-        // Normalize tokens so lookups are case-insensitive and whitespace-agnostic.
-        const std::string app = NormalizeAppToken(app_token);
-        const std::string source = NormalizeKeyToken(key_token);
-        const std::string target = NormalizeKeyToken(action_token);
-
-        parsed[app][source] = target;
     }
 
-    if (parsed.empty()) {
-        return BuildDefaultMappings();
+    if (result.mappings.empty()) {
+        result.mappings = BuildDefaultMappings();
+        if (result.modifiers.empty()) {
+            result.modifiers = BuildDefaultModifiers();
+        }
+        result.has_modifiers_section = true;
     }
 
-    return parsed;
+    return result;
 }
 
-// Default vim-style arrows that keep the product useful when no config exists.
+// Default arrow keys that keep the product useful when no config exists.
 ConfigLoader::MappingTable ConfigLoader::BuildDefaultMappings() {
     return {
-        {"*", {{"H", "LEFT"}, {"J", "DOWN"}, {"K", "UP"}, {"L", "RIGHT"}}},
+        {"*", {
+            MappingDefinition{"J", "LEFT", {}},
+            MappingDefinition{"K", "DOWN", {}},
+            MappingDefinition{"I", "UP", {}},
+            MappingDefinition{"L", "RIGHT", {}},
+            MappingDefinition{"J", "HOME", {"D"}},
+            MappingDefinition{"K", "PAGEDOWN", {"D"}},
+            MappingDefinition{"I", "PAGEUP", {"D"}},
+            MappingDefinition{"L", "END", {"D"}},
+            MappingDefinition{"J", "SHIFT! LEFT", {"S"}},
+            MappingDefinition{"K", "SHIFT! DOWN", {"S"}},
+            MappingDefinition{"I", "SHIFT! UP", {"S"}},
+            MappingDefinition{"L", "SHIFT! RIGHT", {"S"}}
+        }},
     };
+}
+
+ConfigLoader::ModifierSet ConfigLoader::BuildDefaultModifiers() {
+    return {"S", "D"};
 }
 
 // Uppercases and strips whitespace so that config lookups become case-insensitive.
