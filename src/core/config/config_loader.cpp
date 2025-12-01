@@ -64,8 +64,10 @@ bool IsSectionHeader(const std::string& line) {
 }
 
 // Parse bracket-delimited tokens from a mapping line
-// Format: [app] [mods] [source] [target] OR [app] [source] [target]
-// Where brackets can contain space-separated keys
+// Format: [app] [mods+source] [target] or [app] [source] [target]
+// The first bracket may optionally include an OS filter token ("mac" or "win")
+// followed by the app name (or "*"). The second bracket contains the source key,
+// optionally preceded by modifiers (mods first).
 struct ParsedMapping {
     std::string app;
     std::vector<std::string> modifiers;
@@ -73,7 +75,39 @@ struct ParsedMapping {
     std::string target;
     bool valid{false};
     std::string error;
+    bool skip{false}; // true when OS filter does not match current platform
 };
+
+std::string ToUpperNoSpace(const std::string& value) {
+    std::string out;
+    out.reserve(value.size());
+    for (char ch : value) {
+        if (std::isspace(static_cast<unsigned char>(ch))) {
+            continue;
+        }
+        out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+    }
+    return out;
+}
+
+bool MatchesCurrentPlatform(const std::string& os_token) {
+    const std::string upper = ToUpperNoSpace(os_token);
+    if (upper == "MAC" || upper == "MACOS") {
+#if defined(__APPLE__)
+        return true;
+#else
+        return false;
+#endif
+    }
+    if (upper == "WIN" || upper == "WINDOWS" || upper == "WIN32" || upper == "WIN64") {
+#if defined(_WIN32)
+        return true;
+#else
+        return false;
+#endif
+    }
+    return false;
+}
 
 ParsedMapping ParseMappingLine(const std::string& line, size_t line_number) {
     ParsedMapping result;
@@ -90,52 +124,53 @@ ParsedMapping ParseMappingLine(const std::string& line, size_t line_number) {
     }
     
     if (groups.size() == 3) {
-        // Format: [app] [source] [target] - no modifiers
-        result.app = ConfigLoader::NormalizeAppToken(groups[0]);
-        result.source = ConfigLoader::NormalizeKeyToken(ConfigLoader::Trim(groups[1]));
+        // Format: [app] [mods? source] [target]
+        std::istringstream app_stream(ConfigLoader::Trim(groups[0]));
+        std::vector<std::string> app_tokens;
+        std::string app_token;
+        while (app_stream >> app_token) {
+            app_tokens.push_back(app_token);
+        }
+        if (app_tokens.empty()) {
+            result.error = "Invalid config line " + std::to_string(line_number) + ": empty app token";
+            return result;
+        }
+
+        size_t app_index = 0;
+        if (app_tokens.size() >= 2 && MatchesCurrentPlatform(app_tokens[0])) {
+            app_index = 1; // skip platform token
+        } else if (app_tokens.size() >= 2 && (ToUpperNoSpace(app_tokens[0]) == "MAC" || ToUpperNoSpace(app_tokens[0]) == "MACOS" ||
+                                              ToUpperNoSpace(app_tokens[0]) == "WIN" || ToUpperNoSpace(app_tokens[0]) == "WINDOWS" ||
+                                              ToUpperNoSpace(app_tokens[0]) == "WIN32" || ToUpperNoSpace(app_tokens[0]) == "WIN64")) {
+            result.skip = true; // OS token present but not matching current platform
+            result.valid = true;
+            return result;
+        }
+
+        std::string app_raw;
+        for (; app_index < app_tokens.size(); ++app_index) {
+            app_raw += app_tokens[app_index];
+        }
+        result.app = ConfigLoader::NormalizeAppToken(app_raw);
+
+        std::istringstream src_stream(ConfigLoader::Trim(groups[1]));
+        std::string token;
+        while (src_stream >> token) {
+            result.modifiers.push_back(ConfigLoader::NormalizeKeyToken(token));
+        }
+        if (result.modifiers.empty()) {
+            result.error = "Invalid config line " + std::to_string(line_number) +
+                           ": missing source key in second bracket";
+            return result;
+        }
+        result.source = std::move(result.modifiers.back());
+        result.modifiers.pop_back(); // remaining tokens are modifiers
+
         result.target = ConfigLoader::NormalizeKeyToken(ConfigLoader::Trim(groups[2]));
-        result.valid = true;
-    } else if (groups.size() == 4) {
-        // Format: [app] [mods] [source] [target]
-        result.app = ConfigLoader::NormalizeAppToken(groups[0]);
-        
-        // Parse modifiers (space-separated keys in the second bracket)
-        std::string mods_str = ConfigLoader::Trim(groups[1]);
-        if (!mods_str.empty()) {
-            std::istringstream mods_stream(mods_str);
-            std::string mod;
-            while (mods_stream >> mod) {
-                result.modifiers.push_back(ConfigLoader::NormalizeKeyToken(mod));
-            }
-        }
-        
-        result.source = ConfigLoader::NormalizeKeyToken(ConfigLoader::Trim(groups[2]));
-        result.target = ConfigLoader::NormalizeKeyToken(ConfigLoader::Trim(groups[3]));
-        result.valid = true;
-    } else if (groups.empty()) {
-        // Fall back to legacy whitespace-delimited format: app source target
-        std::string trimmed = ConfigLoader::Trim(line);
-        if (trimmed.find('=') != std::string::npos) {
-            result.error = "Invalid config line " + std::to_string(line_number) +
-                          ": '=' separators are not supported; use whitespace or brackets";
-            return result;
-        }
-        
-        std::istringstream line_stream(trimmed);
-        std::string app_token, key_token, action_token;
-        if (!(line_stream >> app_token >> key_token >> action_token)) {
-            result.error = "Invalid config line " + std::to_string(line_number) +
-                          ": expected '[app] [source] [target]' or 'app source target'";
-            return result;
-        }
-        
-        result.app = ConfigLoader::NormalizeAppToken(app_token);
-        result.source = ConfigLoader::NormalizeKeyToken(key_token);
-        result.target = ConfigLoader::NormalizeKeyToken(action_token);
         result.valid = true;
     } else {
         result.error = "Invalid config line " + std::to_string(line_number) +
-                      ": expected 3 or 4 bracket groups, found " + std::to_string(groups.size());
+                      ": expected '[app] [source] [target]' or '[app] [mods source] [target]'";
     }
     
     return result;
@@ -268,6 +303,9 @@ ConfigLoader::ParseResult ConfigLoader::ParseConfigFile(const std::string& path)
             if (!parsed.valid) {
                 throw std::runtime_error(parsed.error);
             }
+            if (parsed.skip) {
+                continue; // OS-filtered mapping not for this platform
+            }
             
             // Validation: if modifiers section exists, check constraints
             if (result.has_modifiers_section) {
@@ -328,16 +366,20 @@ ConfigLoader::MappingTable ConfigLoader::BuildDefaultMappings() {
             MappingDefinition{"K", "DOWN", {}},
             MappingDefinition{"I", "UP", {}},
             MappingDefinition{"L", "RIGHT", {}},
-            MappingDefinition{"J", "HOME", {"A"}},
-            MappingDefinition{"K", "PAGEDOWN", {"A"}},
-            MappingDefinition{"I", "PAGEUP", {"A"}},
-            MappingDefinition{"L", "END", {"A"}}
+            MappingDefinition{"J", "HOME", {"D"}},
+            MappingDefinition{"K", "PAGEDOWN", {"D"}},
+            MappingDefinition{"I", "PAGEUP", {"D"}},
+            MappingDefinition{"L", "END", {"D"}},
+            MappingDefinition{"J", "SHIFT! LEFT", {"S"}},
+            MappingDefinition{"K", "SHIFT! DOWN", {"S"}},
+            MappingDefinition{"I", "SHIFT! UP", {"S"}},
+            MappingDefinition{"L", "SHIFT! RIGHT", {"S"}}
         }},
     };
 }
 
 ConfigLoader::ModifierSet ConfigLoader::BuildDefaultModifiers() {
-    return {"A"};
+    return {"S", "D"};
 }
 
 // Uppercases and strips whitespace so that config lookups become case-insensitive.

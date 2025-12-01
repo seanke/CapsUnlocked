@@ -6,7 +6,7 @@ A small keyboard layer tool that turns `CapsLock` into a momentary modifier. Whi
 - Hold `CapsLock` to activate the layer
 - Remap keys via `capsunlocked.ini` next to the executable
 - Default mapping: `j=Left`, `k=Down`, `i=Up`, `l=Right`
-- Default modifier combos: hold `a` for `j=Home`, `k=PageDown`, `i=PageUp`, `l=End`
+- Default modifier combos: hold `d` for `j=Home`, `k=PageDown`, `i=PageUp`, `l=End`; hold `s` for Shift+arrows
 - **Layer Modifiers**: Define custom modifier keys that, when held along with CapsLock, activate alternative mappings
 - Uses a low-level keyboard hook and `SendInput`
 
@@ -38,41 +38,38 @@ On first run CapsUnlocked writes a default `capsunlocked.ini` next to the execut
 Config file path: `./capsunlocked.ini` (same folder as the executable)
 
 ### Basic Config (matches the default)
-Defaults with a single modifier (`a`) for navigation:
+Defaults with two modifiers (`d` for navigation, `s` for shifted navigation):
 ```ini
 [modifiers]
-a
-
-[maps]
-*                   j   Left
-*                   k   Down
-*                   i   Up
-*                   l   Right
-
-[*] [a] [j] [Home]
-[*] [a] [k] [PageDown]
-[*] [a] [i] [PageUp]
-[*] [a] [l] [End]
-```
-
-### Extended Format with Modifiers
-For advanced layer control, you can define modifier keys and create conditional mappings:
-
-```ini
-[modifiers]
-a
 s
+d
 
 [maps]
-# When both 'a' and 's' are held with CapsLock, pressing 'j' sends Shift+End
-[*] [a s] [j] [Shift End]
+[*] [j] [Left]
+[*] [k] [Down]
+[*] [i] [Up]
+[*] [l] [Right]
 
-# When neither 'a' nor 's' are held, pressing 'j' sends Down
-[*] [] [j] [Down]
+[*] [d j] [Home]
+[*] [d k] [PageDown]
+[*] [d i] [PageUp]
+[*] [d l] [End]
 
-# Regular mapping without modifiers
-[*] [h] [Left]
+[*] [s j] [Shift! Left]
+[*] [s k] [Shift! Down]
+[*] [s i] [Shift! Up]
+[*] [s l] [Shift! Right]
+
+# Platform-specific example
+[mac *] [c] [Command V]
+[win *] [c] [Control V]
 ```
+
+### Mapping Syntax
+- **Bracket format**: `[app] [source] [target]` (no modifiers)
+- **With modifiers**: `[app] [mods source] [target]` (mods first, source last)
+  - Example: `[*] [s j] [Shift! Left]` sends Shift+Left when `s` is held with CapsLock
+- **Platform filter**: prefix the app bracket with `mac` or `win` (e.g., `[mac *] [...]`)
 
 ### Modifiers Section
 - **`[modifiers]`**: Optional section listing keys that act as layer modifiers
@@ -80,13 +77,6 @@ s
 - Modifier keys are reserved and cannot be used as source or target keys in mappings
 - When you press a modifier key while the layer is active, it's swallowed (not sent through)
 - Modifiers use logical AND: all listed modifiers must be held for a mapping to activate
-
-### Mapping Syntax
-- **Legacy format**: `app source target` (whitespace-delimited)
-- **Bracket format**: `[app] [source] [target]` (no modifiers)
-- **With modifiers**: `[app] [mods] [source] [target]`
-  - `mods` is a space-separated list of modifiers that must be held
-  - Use `[]` for an empty modifier list (fallback mapping)
 
 ### Mapping Priority
 When multiple mappings exist for the same source key, the most specific one (with the most matching modifiers) takes priority.
@@ -102,7 +92,7 @@ When a `[modifiers]` section is present:
 2. Keys declared as modifiers cannot be used as target keys in mappings
 3. Modifiers used in mapping modifier lists must be defined in the `[modifiers]` section
 
-If no `[modifiers]` section exists, the config file behaves as before (backwards compatible).
+If no `[modifiers]` section exists, mappings apply without modifier constraints.
 
 ## Notes
 - CapsLock is swallowed and used purely as a momentary modifier; tapping it does not toggle caps state.
