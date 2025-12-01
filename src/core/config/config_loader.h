@@ -49,6 +49,7 @@ private:
 
     [[nodiscard]] ParseResult ParseConfigFile(const std::string& path) const;
     [[nodiscard]] static MappingTable BuildDefaultMappings();
+    [[nodiscard]] static ModifierSet BuildDefaultModifiers();
 
     std::string config_path_;
     MappingTable mappings_;

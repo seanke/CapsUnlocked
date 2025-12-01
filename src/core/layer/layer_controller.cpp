@@ -72,15 +72,18 @@ bool LayerController::OnKeyEvent(const KeyEvent& event) {
     // Check if this key is a modifier
     if (mapping_.IsModifier(normalized_key)) {
         if (event.pressed) {
-            active_modifiers_.insert(normalized_key);
-            std::ostringstream msg;
-            msg << "Modifier " << normalized_key << " pressed (active: " << active_modifiers_.size() << ")";
-            logging::Debug(msg.str());
+            const auto [_, inserted] = active_modifiers_.insert(normalized_key);
+            if (inserted) {
+                std::ostringstream msg;
+                msg << "Modifier " << normalized_key << " pressed (active: " << active_modifiers_.size() << ")";
+                logging::Debug(msg.str());
+            }
         } else {
-            active_modifiers_.erase(normalized_key);
-            std::ostringstream msg;
-            msg << "Modifier " << normalized_key << " released (active: " << active_modifiers_.size() << ")";
-            logging::Debug(msg.str());
+            if (active_modifiers_.erase(normalized_key) > 0) {
+                std::ostringstream msg;
+                msg << "Modifier " << normalized_key << " released (active: " << active_modifiers_.size() << ")";
+                logging::Debug(msg.str());
+            }
         }
         // Swallow modifier key events - they should not pass through
         return true;

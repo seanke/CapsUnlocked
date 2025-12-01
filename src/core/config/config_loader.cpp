@@ -144,7 +144,9 @@ ParsedMapping ParseMappingLine(const std::string& line, size_t line_number) {
 } // namespace
 
 ConfigLoader::ConfigLoader()
-    : mappings_(BuildDefaultMappings()) {}
+    : mappings_(BuildDefaultMappings()),
+      modifiers_(BuildDefaultModifiers()),
+      has_modifiers_section_(true) {}
 
 // Reads the config at `path`, remembering it so Reload() can reuse the same source.
 void ConfigLoader::Load(const std::string& path) {
@@ -225,6 +227,8 @@ ConfigLoader::ParseResult ConfigLoader::ParseConfigFile(const std::string& path)
     if (!stream.is_open()) {
         ParseResult result;
         result.mappings = BuildDefaultMappings();
+        result.modifiers = BuildDefaultModifiers();
+        result.has_modifiers_section = true;
         return result;
     }
 
@@ -307,21 +311,33 @@ ConfigLoader::ParseResult ConfigLoader::ParseConfigFile(const std::string& path)
 
     if (result.mappings.empty()) {
         result.mappings = BuildDefaultMappings();
+        if (result.modifiers.empty()) {
+            result.modifiers = BuildDefaultModifiers();
+        }
+        result.has_modifiers_section = true;
     }
 
     return result;
 }
 
-// Default vim-style arrows that keep the product useful when no config exists.
+// Default arrow keys that keep the product useful when no config exists.
 ConfigLoader::MappingTable ConfigLoader::BuildDefaultMappings() {
     return {
         {"*", {
-            MappingDefinition{"H", "LEFT", {}},
-            MappingDefinition{"J", "DOWN", {}},
-            MappingDefinition{"K", "UP", {}},
-            MappingDefinition{"L", "RIGHT", {}}
+            MappingDefinition{"J", "LEFT", {}},
+            MappingDefinition{"K", "DOWN", {}},
+            MappingDefinition{"I", "UP", {}},
+            MappingDefinition{"L", "RIGHT", {}},
+            MappingDefinition{"J", "HOME", {"A"}},
+            MappingDefinition{"K", "PAGEDOWN", {"A"}},
+            MappingDefinition{"I", "PAGEUP", {"A"}},
+            MappingDefinition{"L", "END", {"A"}}
         }},
     };
+}
+
+ConfigLoader::ModifierSet ConfigLoader::BuildDefaultModifiers() {
+    return {"A"};
 }
 
 // Uppercases and strips whitespace so that config lookups become case-insensitive.

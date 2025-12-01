@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <utility>
 
 namespace caps::core {
 
@@ -31,16 +32,16 @@ std::optional<MappingEngine::ResolvedMapping> MappingEngine::ResolveMapping(
     const std::string normalized_app = NormalizeAppToken(app);
 
     // Helper to find best matching mapping from a definitions list
-    auto find_best_match = [&](const std::vector<MappingDefinition>& definitions) 
-        -> std::optional<const MappingDefinition*> {
+    auto find_best_match = [&](const std::vector<MappingDefinition>& definitions)
+        -> std::optional<std::pair<const MappingDefinition*, size_t>> {
         const MappingDefinition* best = nullptr;
         size_t best_mod_count = 0;
-        
+
         for (const auto& def : definitions) {
             if (def.source != normalized) {
                 continue;
             }
-            
+
             // Check if all required modifiers are active
             bool all_mods_active = true;
             for (const auto& mod : def.required_mods) {
@@ -49,11 +50,11 @@ std::optional<MappingEngine::ResolvedMapping> MappingEngine::ResolveMapping(
                     break;
                 }
             }
-            
+
             if (!all_mods_active) {
                 continue;
             }
-            
+
             // Prefer mappings with more modifiers (more specific).
             // When counts are equal, keep the first match found (config file order determines priority).
             if (best == nullptr || def.required_mods.size() > best_mod_count) {
@@ -61,26 +62,33 @@ std::optional<MappingEngine::ResolvedMapping> MappingEngine::ResolveMapping(
                 best_mod_count = def.required_mods.size();
             }
         }
-        
+
         if (best) {
-            return best;
+            return std::make_pair(best, best_mod_count);
         }
         return std::nullopt;
     };
 
-    // Prefer an app-specific mapping when available, otherwise fall back to "*".
+    // Prefer the most specific mapping across app-specific and "*" fallbacks.
     const auto by_app = resolved_.find(normalized_app);
-    if (by_app != resolved_.end()) {
-        if (auto match = find_best_match(by_app->second)) {
-            return ResolvedMapping{(*match)->target, normalized_app, (*match)->required_mods};
-        }
+    const auto fallback = resolved_.find("*");
+
+    auto best_app = (by_app != resolved_.end()) ? find_best_match(by_app->second) : std::nullopt;
+    auto best_fallback = (fallback != resolved_.end()) ? find_best_match(fallback->second) : std::nullopt;
+
+    const MappingDefinition* winner = nullptr;
+    std::string winner_app;
+
+    if (best_app && (!best_fallback || best_app->second >= best_fallback->second)) {
+        winner = best_app->first;
+        winner_app = normalized_app;
+    } else if (best_fallback) {
+        winner = best_fallback->first;
+        winner_app = "*";
     }
 
-    const auto fallback = resolved_.find("*");
-    if (fallback != resolved_.end()) {
-        if (auto match = find_best_match(fallback->second)) {
-            return ResolvedMapping{(*match)->target, "*", (*match)->required_mods};
-        }
+    if (winner) {
+        return ResolvedMapping{winner->target, winner_app, winner->required_mods};
     }
 
     return std::nullopt;

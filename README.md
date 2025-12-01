@@ -1,11 +1,12 @@
 # CapsUnlocked (Windows 11 & macOS)
 
-A small keyboard layer tool that turns `CapsLock` into a momentary modifier. While held, selected keys are remapped based on a config file. By default, `h j k l` become the arrow keys. On Windows it lives in the system tray with a right-click Exit menu; on macOS it runs as a background console app.
+A small keyboard layer tool that turns `CapsLock` into a momentary modifier. While held, selected keys are remapped based on a config file. By default, `j k i l` become the arrow keys (`j` left, `l` right, `i` up, `k` down) and holding `a` adds navigation combos (`a+j` = Home, `a+k` = PageDown, `a+i` = PageUp, `a+l` = End). On Windows it lives in the system tray with a right-click Exit menu; on macOS it runs as a background console app.
 
 ## Features
 - Hold `CapsLock` to activate the layer
 - Remap keys via `capsunlocked.ini` next to the executable
-- Default mapping: `h=Left`, `j=Down`, `k=Up`, `l=Right`
+- Default mapping: `j=Left`, `k=Down`, `i=Up`, `l=Right`
+- Default modifier combos: hold `a` for `j=Home`, `k=PageDown`, `i=PageUp`, `l=End`
 - **Layer Modifiers**: Define custom modifier keys that, when held along with CapsLock, activate alternative mappings
 - Uses a low-level keyboard hook and `SendInput`
 
@@ -36,14 +37,22 @@ On first run CapsUnlocked writes a default `capsunlocked.ini` next to the execut
 ## Config
 Config file path: `./capsunlocked.ini` (same folder as the executable)
 
-### Basic Format (Legacy)
-Simple whitespace-delimited format for basic mappings:
+### Basic Config (matches the default)
+Defaults with a single modifier (`a`) for navigation:
 ```ini
-# app  source  target
-*      h       Left
-*      j       Down
-*      k       Up
-*      l       Right
+[modifiers]
+a
+
+[maps]
+*                   j   Left
+*                   k   Down
+*                   i   Up
+*                   l   Right
+
+[*] [a] [j] [Home]
+[*] [a] [k] [PageDown]
+[*] [a] [i] [PageUp]
+[*] [a] [l] [End]
 ```
 
 ### Extended Format with Modifiers

@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "core/logging.h"
 #include "platform/windows/keyboard_hook.h"
@@ -50,6 +51,9 @@ std::optional<WORD> LookupNamedKey(const std::string& token) {
         {"BACKSPACE", VK_BACK},    {"DELETE", VK_DELETE},
         {"HOME", VK_HOME},         {"END", VK_END},
         {"PAGEUP", VK_PRIOR},      {"PAGEDOWN", VK_NEXT},
+        {"SHIFT", VK_SHIFT},       {"LSHIFT", VK_LSHIFT},
+        {"RSHIFT", VK_RSHIFT},     {"CTRL", VK_CONTROL},
+        {"CONTROL", VK_CONTROL},   {"ALT", VK_MENU},
         {"F1", VK_F1},             {"F2", VK_F2},
         {"F3", VK_F3},             {"F4", VK_F4},
         {"F5", VK_F5},             {"F6", VK_F6},
@@ -85,19 +89,31 @@ std::optional<WORD> LookupKeyCode(const std::string& action) {
     return LookupNamedKey(normalized);
 }
 
-} // namespace
+struct ActionToken {
+    std::string key;
+    bool hold{false};
+};
 
-// Emits a synthetic key press/release corresponding to the mapped action string
-void Output::Emit(const std::string& action, bool pressed) {
-    const auto vk_code = LookupKeyCode(action);
-    if (!vk_code) {
-        core::logging::Warn("[Windows::Output] Unknown action '" + action + "'");
-        return;
+std::vector<ActionToken> SplitTokens(const std::string& action) {
+    std::istringstream stream(action);
+    std::vector<ActionToken> tokens;
+    std::string token;
+    while (stream >> token) {
+        ActionToken parsed;
+        parsed.hold = !token.empty() && token.back() == '!';
+        if (parsed.hold) {
+            token.pop_back();
+        }
+        parsed.key = token;
+        tokens.push_back(std::move(parsed));
     }
+    return tokens;
+}
 
+bool SendSingle(WORD vk_code, bool pressed) {
     INPUT input = {};
     input.type = INPUT_KEYBOARD;
-    input.ki.wVk = *vk_code;
+    input.ki.wVk = vk_code;
     input.ki.dwFlags = pressed ? 0 : KEYEVENTF_KEYUP;
     input.ki.dwExtraInfo = kSyntheticEventTag;
 
@@ -105,10 +121,64 @@ void Output::Emit(const std::string& action, bool pressed) {
     if (result != 1) {
         const DWORD error = GetLastError();
         std::ostringstream msg;
-        msg << "[Windows::Output] Failed to send input for " << action 
-            << ", error code: 0x" << std::hex << error;
+        msg << "[Windows::Output] Failed to send input for vk=0x" << std::hex << vk_code
+            << " (pressed=" << pressed << "), error code: 0x" << std::hex << error;
         core::logging::Error(msg.str());
+        return false;
     }
+    return true;
+}
+
+} // namespace
+
+// Emits a synthetic key press/release corresponding to the mapped action string
+void Output::Emit(const std::string& action, bool pressed) {
+    const auto tokens = SplitTokens(action);
+    if (tokens.empty()) {
+        core::logging::Warn("[Windows::Output] Empty action");
+        return;
+    }
+
+    std::vector<std::pair<WORD, bool>> sequence;
+    sequence.reserve(tokens.size() * 2);
+
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        const auto& tok = tokens[i];
+        const auto vk_code = LookupKeyCode(tok.key);
+        if (!vk_code) {
+            core::logging::Warn("[Windows::Output] Unknown action token '" + tok.key + "' in '" + action + "'");
+            return;
+        }
+
+        if (tok.hold) {
+            if (i + 1 >= tokens.size()) {
+                core::logging::Warn("[Windows::Output] Hold token '" + tok.key + "!' has no following key in '" + action + "'");
+                return;
+            }
+            const auto next_code = LookupKeyCode(tokens[i + 1].key);
+            if (!next_code) {
+                core::logging::Warn("[Windows::Output] Unknown action token '" + tokens[i + 1].key + "' in '" + action + "'");
+                return;
+            }
+            sequence.emplace_back(*vk_code, true);    // hold down
+            sequence.emplace_back(*next_code, true);  // tap target
+            sequence.emplace_back(*next_code, false); // release target
+            sequence.emplace_back(*vk_code, false);   // release hold
+            ++i; // consume the next token
+        } else {
+            sequence.emplace_back(*vk_code, true);
+            sequence.emplace_back(*vk_code, false);
+        }
+    }
+
+    if (pressed) {
+        for (const auto& [code, down] : sequence) {
+            if (!SendSingle(code, down)) {
+                return;
+            }
+        }
+    }
+    // Macro completes on press; releases are ignored for synthetic sequences.
 }
 
 } // namespace caps::platform::windows
