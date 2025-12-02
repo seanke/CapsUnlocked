@@ -83,6 +83,7 @@ When multiple mappings exist for the same source key, the most specific one (wit
 
 ### Supported Tokens
 - Single characters: `h`, `a`, `j`
+- Number keys: `0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`
 - Common key names: `Left`, `Right`, `Up`, `Down`, `Enter`, `Esc`, `Tab`, `Space`, `Backspace`, `Delete`, `Home`, `End`, `PageUp`, `PageDown`, `Shift`, `Ctrl`, `Alt`
 - Hex key codes: `0x25` (virtual-key on Windows, CGKeyCode on macOS)
 

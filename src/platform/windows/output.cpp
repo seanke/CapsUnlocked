@@ -66,6 +66,11 @@ std::optional<WORD> LookupNamedKey(const std::string& token) {
         return LookupLetter(token.front());
     }
 
+    // For digits 0-9, VK codes match ASCII ('0' = 0x30, '9' = 0x39)
+    if (token.size() == 1 && std::isdigit(static_cast<unsigned char>(token.front()))) {
+        return static_cast<WORD>(token.front());
+    }
+
     const auto it = kNamedKeys.find(token);
     if (it != kNamedKeys.end()) {
         return it->second;

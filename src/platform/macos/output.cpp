@@ -51,6 +51,20 @@ std::optional<CGKeyCode> LookupLetter(char letter) {
     return std::nullopt;
 }
 
+// Maps ASCII digits to CGKeyCode constants.
+std::optional<CGKeyCode> LookupDigit(char digit) {
+    static const std::unordered_map<char, CGKeyCode> kDigitMap = {
+        {'0', kVK_ANSI_0}, {'1', kVK_ANSI_1}, {'2', kVK_ANSI_2}, {'3', kVK_ANSI_3}, {'4', kVK_ANSI_4},
+        {'5', kVK_ANSI_5}, {'6', kVK_ANSI_6}, {'7', kVK_ANSI_7}, {'8', kVK_ANSI_8}, {'9', kVK_ANSI_9},
+    };
+
+    const auto it = kDigitMap.find(digit);
+    if (it != kDigitMap.end()) {
+        return it->second;
+    }
+    return std::nullopt;
+}
+
 // Handles named keys such as arrow/home/end plus single characters.
 std::optional<CGKeyCode> LookupNamedKey(const std::string& token) {
     static const std::unordered_map<std::string, CGKeyCode> kNamedKeys = {
@@ -72,6 +86,10 @@ std::optional<CGKeyCode> LookupNamedKey(const std::string& token) {
 
     if (token.size() == 1 && std::isalpha(static_cast<unsigned char>(token.front()))) {
         return LookupLetter(token.front());
+    }
+
+    if (token.size() == 1 && std::isdigit(static_cast<unsigned char>(token.front()))) {
+        return LookupDigit(token.front());
     }
 
     const auto it = kNamedKeys.find(token);
